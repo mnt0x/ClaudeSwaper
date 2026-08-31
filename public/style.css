@@ -1,0 +1,346 @@
+/* swaper — terminal theme, horizontal rows. */
+
+:root {
+  --bg: #05070a;
+  --panel: #080c10;
+  --panel-2: #0b1116;
+  --line: #16242c;
+  --line-hot: #1d3a42;
+
+  --fg: #b8e6d2;
+  --fg-dim: #5c7f72;
+  --fg-faint: #35524a;
+
+  --grn: #00ff9c;
+  --amb: #ffcc4d;
+  --org: #ff9838;
+  --red: #ff4d6d;
+  --cyn: #35d6ff;
+
+  --mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, "DejaVu Sans Mono", monospace;
+  --sev: var(--grn);
+}
+
+* { box-sizing: border-box; }
+
+/* A class rule with its own display value outranks the UA [hidden] rule and would
+   leave banners and the empty state permanently on screen. Settle it once, globally. */
+[hidden] { display: none !important; }
+
+html, body { margin: 0; min-height: 100%; }
+
+body {
+  background:
+    linear-gradient(rgba(0, 255, 156, 0.022) 1px, transparent 1px) 0 0 / 100% 3px,
+    radial-gradient(900px 500px at 50% -10%, rgba(0, 255, 156, 0.05), transparent 70%),
+    var(--bg);
+  color: var(--fg);
+  font: 13px/1.5 var(--mono);
+  padding: 0 clamp(0.75rem, 2.5vw, 2rem) 4rem;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* faint CRT sweep; disabled under reduced motion */
+.scan {
+  position: fixed; inset: 0; pointer-events: none; z-index: 100;
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 255, 156, 0.035) 50%, transparent 100%);
+  height: 160px;
+  animation: sweep 7s linear infinite;
+}
+@keyframes sweep { from { transform: translateY(-160px); } to { transform: translateY(100vh); } }
+
+/* ---------- header ---------- */
+
+.hdr {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 1.5rem; flex-wrap: wrap;
+  padding: 1.5rem 0 1.25rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 1.25rem;
+}
+
+.logo {
+  margin: 0;
+  font-size: 26px; font-weight: 700; letter-spacing: 0.16em;
+  color: var(--grn);
+  text-shadow: 0 0 18px rgba(0, 255, 156, 0.4);
+  display: flex; align-items: baseline; gap: 0.5rem;
+}
+.logo .chev { color: var(--fg-faint); text-shadow: none; }
+.logo .tag {
+  color: var(--fg-faint); text-shadow: none;
+  font-size: 11px; font-weight: 400; letter-spacing: 0.04em;
+}
+
+.prompt { margin: 0.5rem 0 0; font-size: 12px; color: var(--fg-dim); }
+.usr { color: var(--grn); }
+.pth { color: var(--cyn); }
+
+.cursor {
+  display: inline-block; width: 7px; height: 13px;
+  background: var(--grn); margin-left: 5px; vertical-align: -2px;
+  animation: blink 1.05s steps(2, start) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.hdr-right { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.stale { color: var(--fg-faint); font-size: 11px; margin-right: 0.4rem; }
+
+/* ---------- buttons ---------- */
+
+.btn {
+  font: inherit; font-size: 12px;
+  color: var(--fg);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.btn:hover:not(:disabled) { border-color: var(--grn); color: var(--grn); background: #0d1a18; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn:focus-visible { outline: 2px solid var(--grn); outline-offset: 2px; }
+.btn .k { color: var(--grn); }
+
+.btn-key { border-color: var(--line-hot); color: var(--grn); }
+.btn-key:hover:not(:disabled) { background: rgba(0, 255, 156, 0.1); }
+
+.linklike {
+  background: none; border: none; padding: 0;
+  color: var(--cyn); font: inherit; cursor: pointer; text-decoration: underline;
+}
+.linklike:focus-visible { outline: 2px solid var(--grn); outline-offset: 2px; }
+
+/* ---------- alerts ---------- */
+
+.alert {
+  display: flex; align-items: baseline; gap: 0.6rem;
+  font-size: 12px; padding: 0.55rem 0.75rem;
+  border: 1px solid; border-radius: 3px;
+  margin-bottom: 0.9rem;
+}
+.alert-tag { font-weight: 700; letter-spacing: 0.08em; flex: none; }
+.alert-warn { border-color: rgba(255, 204, 77, 0.35); background: rgba(255, 204, 77, 0.06); color: #e8d49a; }
+.alert-warn .alert-tag { color: var(--amb); }
+.alert-err { border-color: rgba(255, 77, 109, 0.35); background: rgba(255, 77, 109, 0.06); color: #f0a8b6; }
+.alert-err .alert-tag { color: var(--red); }
+.alert code { color: var(--cyn); }
+
+/* ---------- board: horizontal rows ---------- */
+
+/* Capped so the gauges stay tight instead of stretching across a 4K monitor. */
+.board {
+  border: 1px solid var(--line); border-radius: 4px; overflow: hidden;
+  max-width: 1240px; margin: 0 auto;
+}
+
+.board-head,
+.row {
+  display: grid;
+  grid-template-columns: 14px minmax(180px, 1fr) 82px 250px 250px 150px;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.board-head {
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--fg-faint);
+  padding-top: 0.5rem; padding-bottom: 0.5rem;
+}
+
+.rows { display: flex; flex-direction: column; }
+
+.row {
+  position: relative;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  transition: background 0.12s;
+}
+.row:last-child { border-bottom: none; }
+.row:hover { background: #0d141a; }
+
+.row.is-active { background: linear-gradient(90deg, rgba(0, 255, 156, 0.08), rgba(0, 255, 156, 0.015) 40%, transparent); }
+.row.is-active::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--grn);
+  box-shadow: 0 0 12px rgba(0, 255, 156, 0.7);
+}
+.row.is-err { background: rgba(255, 77, 109, 0.05); }
+.row.is-busy { opacity: 0.55; pointer-events: none; }
+
+.led {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--fg-faint);
+  justify-self: center;
+}
+.row.is-active .led { background: var(--grn); box-shadow: 0 0 9px var(--grn); }
+.row.is-err .led { background: var(--red); box-shadow: 0 0 9px var(--red); }
+
+.who { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.name { color: var(--fg); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail { color: var(--fg-faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.plan {
+  font-size: 10px; letter-spacing: 0.06em;
+  color: var(--cyn);
+  border: 1px solid rgba(53, 214, 255, 0.28);
+  border-radius: 2px;
+  padding: 0.14rem 0.35rem;
+  justify-self: start;
+  white-space: nowrap;
+}
+
+/* ---------- gauges: segmented block bars ---------- */
+
+.gauge { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gauge[data-sev="normal"]   { --sev: var(--grn); }
+.gauge[data-sev="medium"]   { --sev: var(--amb); }
+.gauge[data-sev="high"]     { --sev: var(--org); }
+.gauge[data-sev="critical"] { --sev: var(--red); }
+.gauge[data-sev="unknown"]  { --sev: var(--fg-faint); }
+
+.gauge-top { display: flex; align-items: baseline; gap: 0.6rem; }
+
+.bar {
+  color: var(--sev);
+  letter-spacing: -0.5px;
+  font-size: 13px;
+  white-space: nowrap;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--sev) 45%, transparent);
+}
+.bar .off { color: var(--line-hot); text-shadow: none; }
+
+.pct {
+  color: var(--sev);
+  font-weight: 700; font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  min-width: 3.2em; text-align: right;
+  white-space: nowrap;
+}
+.rst { color: var(--fg-faint); font-size: 10.5px; white-space: nowrap; }
+
+/* ---------- actions ---------- */
+
+.act { display: flex; align-items: center; gap: 0.4rem; justify-self: end; }
+
+.btn-swap {
+  border-color: var(--line-hot);
+  color: var(--grn);
+  font-weight: 700; letter-spacing: 0.1em;
+  padding: 0.42rem 1.1rem;
+}
+.btn-swap:hover:not(:disabled) {
+  background: var(--grn); color: #04120c; border-color: var(--grn);
+  box-shadow: 0 0 16px rgba(0, 255, 156, 0.4);
+}
+.row.is-active .btn-swap { display: none; }
+
+.inuse {
+  display: none;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+  color: var(--grn);
+  border: 1px solid rgba(0, 255, 156, 0.35);
+  border-radius: 2px;
+  padding: 0.34rem 0.6rem;
+}
+.row.is-active .inuse { display: inline-block; }
+
+.btn-x { color: var(--fg-faint); padding: 0.34rem 0.5rem; border-color: transparent; background: transparent; }
+.btn-x:hover:not(:disabled) { color: var(--red); border-color: rgba(255, 77, 109, 0.4); background: transparent; }
+
+.row-err {
+  grid-column: 2 / -1;
+  margin: 0.15rem 0 0;
+  font-size: 11px;
+  color: #f0a8b6;
+}
+
+/* skeleton */
+.row.is-skel .who, .row.is-skel .gauge, .row.is-skel .plan {
+  background: linear-gradient(90deg, #0d141a 25%, #16232a 50%, #0d141a 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+  height: 1.9rem; border-radius: 2px; color: transparent;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* ---------- empty ---------- */
+
+.empty { text-align: center; padding: 3.5rem 1rem; }
+.empty-art { color: var(--fg-faint); font-size: 12px; margin: 0 0 1.4rem; }
+.empty p { color: var(--fg-dim); font-size: 12.5px; line-height: 2; margin: 0 0 1.6rem; }
+.empty b { color: var(--grn); font-weight: 700; }
+.empty-actions { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+
+/* ---------- toasts ---------- */
+
+.toasts {
+  position: fixed; right: 1rem; bottom: 1rem; z-index: 80;
+  display: flex; flex-direction: column; gap: 0.35rem;
+  max-width: min(26rem, calc(100vw - 2rem));
+}
+.toast {
+  background: var(--panel);
+  border: 1px solid var(--line-hot);
+  border-left: 2px solid var(--grn);
+  border-radius: 3px;
+  padding: 0.55rem 0.75rem;
+  font-size: 11.5px;
+  color: var(--fg);
+  animation: slide 0.18s ease-out;
+}
+.toast::before { content: "> "; color: var(--grn); }
+.toast.err { border-left-color: var(--red); }
+.toast.err::before { content: "! "; color: var(--red); }
+.toast.leaving { animation: fade 0.18s ease-in forwards; }
+@keyframes slide { from { opacity: 0; transform: translateX(10px); } }
+@keyframes fade { to { opacity: 0; } }
+
+/* ---------- narrow: rows become stacked blocks, still one per account ---------- */
+
+/* The six fixed columns need ~1035px once gaps and padding are counted. Below that the
+   board clipped its own last column, hiding SWAP — the one control that matters. */
+@media (max-width: 1080px) {
+  .board-head { display: none; }
+  .row {
+    grid-template-columns: 14px 1fr auto;
+    grid-template-areas:
+      "led who act"
+      ".   ses ses"
+      ".   wk  wk"
+      ".   err err";
+    row-gap: 0.7rem;
+  }
+  .led { grid-area: led; align-self: start; margin-top: 0.4rem; }
+  .who { grid-area: who; }
+  .plan { display: none; }
+  .gauge[data-kind="session"] { grid-area: ses; }
+  .gauge[data-kind="weekly"] { grid-area: wk; }
+  /* the column header is hidden here, so name each bar inline */
+  .gauge-top::before {
+    font-size: 10px; letter-spacing: 0.1em; color: var(--fg-faint);
+    min-width: 2.4em; align-self: center;
+  }
+  .gauge[data-kind="session"] .gauge-top::before { content: "5H"; }
+  .gauge[data-kind="weekly"] .gauge-top::before { content: "7D"; }
+  .act { grid-area: act; }
+  .row-err { grid-area: err; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan { display: none; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+
+/* stale = numbers we kept from the last good read while the API is unavailable */
+.row.is-stale .bar,
+.row.is-stale .pct { opacity: 0.55; }
+.row.is-stale .led { background: var(--amb); box-shadow: 0 0 9px var(--amb); }

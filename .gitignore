@@ -1,0 +1,6 @@
+# Contains live OAuth tokens for real paid accounts. Never commit, never share.
+data/
+
+node_modules/
+*.tmp
+*.log

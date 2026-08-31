@@ -1,0 +1,170 @@
+# ClaudeSwaper — internals
+
+Notes on how Claude Code stores its session, and what ClaudeSwaper does with it.
+Everything here was verified empirically against a live installation, not inferred.
+
+Zero dependencies. Node >= 18 (global `fetch`). No build step.
+
+---
+
+## Where the session lives
+
+| Piece | Location |
+|---|---|
+| Tokens | Windows/Linux: `~/.claude/.credentials.json` · macOS: login Keychain |
+| Identity | `~/.claude.json` -> `oauthAccount` |
+
+`lib/credentials.js` is the only module that knows which backend applies.
+
+`.credentials.json` shape:
+
+    { "mcpOAuth": { ... },
+      "claudeAiOauth": {
+        "accessToken": "...", "refreshToken": "...",
+        "expiresAt": 0, "refreshTokenExpiresAt": 0,
+        "scopes": [], "subscriptionType": "max", "rateLimitTier": "default_claude_max_20x" } }
+
+`~/.claude.json` is large (~130 KB) and holds dozens of unrelated keys — `projects`,
+`mcpServers`, plugin state, onboarding flags. Only `oauthAccount` is ours to touch:
+
+    "oauthAccount": { accountUuid, emailAddress, organizationUuid, hasExtraUsageEnabled,
+      billingType, accountCreatedAt, subscriptionCreatedAt, ccOnboardingFlags,
+      claudeCodeTrialEndsAt, claudeCodeTrialDurationDays, seatTier, displayName, fullName,
+      profileFetchedAt, organizationRole, workspaceRole, organizationName, organizationType,
+      organizationRateLimitTier, userRateLimitTier }
+
+**`userID` is deliberately never written.** It does not derive from `accountUuid` — five hash
+hypotheses were tested and none matched — so it is an install/telemetry identifier, not an
+account one. Leaving it alone removes a whole class of risk.
+
+`~/.claude.json` can go **stale** relative to the tokens: switching accounts by hand updates
+the credentials but not `oauthAccount`. So the profile endpoint, not the local file, is the
+source of truth for who a token belongs to.
+
+---
+
+## Anthropic endpoints used
+
+All with these headers:
+
+    Authorization: Bearer <accessToken>
+    anthropic-beta: oauth-2025-04-20
+    User-Agent: claude-cli/2.0.0 (external, cli)
+
+| Purpose | Endpoint |
+|---|---|
+| Usage | `GET https://api.anthropic.com/api/oauth/usage` |
+| Profile | `GET https://api.anthropic.com/api/oauth/profile` |
+| Token refresh | `POST https://api.anthropic.com/v1/oauth/token` |
+
+OAuth client id: `9d1c250a-e61b-44d9-88ed-5944d1962f5e`
+
+Scopes: `user:inference user:profile user:sessions:claude_code user:mcp_servers user:file_upload`
+
+> The token host matters. `https://console.anthropic.com/v1/oauth/token` answers **404
+> not_found**; `api.anthropic.com` answers **400 invalid_grant** for a bad refresh token, i.e.
+> it actually processed the request. Probed with a deliberately invalid token to avoid
+> rotating a real one.
+
+> There is no in-app OAuth login. The client only accepts its own registered redirect URIs —
+> a loopback `http://127.0.0.1:PORT/callback` is rejected with *"Redirect URI ... is not
+> supported by client"*. Importing an existing session is simpler and always works.
+
+### Usage response
+
+`limits[]` is the source of truth; the top-level keys are legacy mirrors kept as a fallback.
+
+    {"five_hour":{"utilization":90.0,"resets_at":"...","locked_reason":null},
+     "seven_day":{"utilization":28.0,"resets_at":"..."},
+     "seven_day_opus":null,
+     "extra_usage":{"is_enabled":false},
+     "limits":[
+       {"kind":"session","group":"session","percent":90,"severity":"critical",
+        "resets_at":"...","scope":null,"is_active":true},
+       {"kind":"weekly_all","group":"weekly","percent":28,"resets_at":"...","scope":null},
+       {"kind":"weekly_scoped","group":"weekly","percent":18,
+        "scope":{"model":{"id":null,"display_name":"Fable"}}}]}
+
+Severity is recomputed locally from the percentage rather than trusting the server string, so
+the API and the CSS always agree: `<50` normal, `50-79` medium, `80-94` high, `>=95` critical.
+
+### Rate limiting
+
+The usage endpoint has a low sustained quota and answers 429 with `Retry-After: 0`, which is
+useless — the block was measured outlasting several minutes. Hence: 5-minute cache, 5-minute
+polling, 10-minute backoff after a 429, and the last known-good reading served as `stale`
+instead of blanking the UI. A 401/403 is surfaced as a real error, since the token is dead.
+
+### Token lifetimes
+
+Access ~8 h, refresh ~29 days, rotating on every use. A background keep-alive renews anything
+with under a day of life left, every 6 hours. Because refreshing **invalidates the previous
+refresh token**, renewing the active account also writes the new pair into the live
+credentials — otherwise Claude Code would be left holding a dead token.
+
+---
+
+## Data store: `data/accounts.json`
+
+    { "version": 1, "activeId": "acc_ab12cd", "accounts": [ {
+      "id": "acc_ab12cd", "label": "...", "color": "#7c5cff", "email": "you@example.com",
+      "oauth": { ...the claudeAiOauth shape... },
+      "profile": { ...the oauthAccount block... },
+      "userID": null, "addedAt": 0, "lastSwappedAt": null } ] }
+
+Ids derive from `accountUuid`, so re-importing an account updates it instead of duplicating.
+Mode 0600, plus an NTFS ACL on Windows where chmod is a no-op. `store.publicView()` is the
+only shape allowed to reach the browser; it strips `oauth` and `userID`.
+
+---
+
+## HTTP API — 127.0.0.1 only
+
+| Method | Path | Returns |
+|---|---|---|
+| GET | `/api/health` | `{ok, claudeRunning, pids, node, platform, credentialsBackend, paths}` |
+| GET | `/api/accounts` | `{activeId, accounts:[...]}` — token fields stripped |
+| GET | `/api/usage/all` | `{ "<id>": NormalizedUsage }`, concurrent, failures isolated |
+| GET | `/api/usage?id=` | `NormalizedUsage` |
+| POST | `/api/swap` | `{id}` -> `{ok, verified, warnings[], backup, account}` |
+| POST | `/api/swap/dryrun` | `{id}` -> what would change, writes nothing |
+| POST | `/api/accounts/import` | `{configDir?}` -> `{ok, account}` |
+| PATCH | `/api/accounts/:id` | `{label?, color?}` |
+| DELETE | `/api/accounts/:id` | `{ok}` |
+
+NormalizedUsage:
+
+    { id, ok:true, fetchedAt, session:{percent,resetsAt,severity},
+      weekly:{...}, scoped:[{label,percent,resetsAt}], opus, extraUsage, locked,
+      stale?, staleSince?, staleReason? }
+    // failure: { id, ok:false, error, status, needsRelogin }
+
+Guards: loopback bind, `Host` validated, cross-site `Origin` rejected, `X-Swaper: 1` required
+on every mutating request, static serving confined to `public/`. Anything matching
+`sk-ant-[A-Za-z0-9_-]+` is scrubbed before it can reach a log or a response body.
+
+---
+
+## The swap
+
+1. Detect running Claude processes — warn, never block.
+2. Back up credentials and `~/.claude.json` to `data/backups/<ts>/`. Backup failure aborts.
+3. Refresh the token if it expires within 5 minutes.
+4. Replace **only** `claudeAiOauth`; `mcpOAuth` and everything else survives.
+5. Set **only** `oauthAccount` and drop the previous account's caches, so Claude Code refetches
+   them: `overageCreditGrantCache, modelAccessCache, orgModelDefaultCache,
+   passesEligibilityCache, cachedExtraUsageDisabledReason, hasAvailableSubscription,
+   clientDataCacheSlots, additionalModelOptionsCache, additionalModelCostsCache,
+   passesLastSeenRemaining`. Every other key keeps its value.
+6. Verify with a **direct** API call — never a cached reading, which would "verify" a token it
+   never used. 401/403 rolls back; a 429 or network failure keeps the swap and warns that it
+   could not be confirmed.
+7. Mark the account active.
+
+Both mutations parse, mutate in place and re-serialise — never rebuild from a whitelist, which
+would silently drop unrelated keys. A key-count check catches that anyway. Any failure past
+step 4 restores both files from the step-2 backup.
+
+Atomic write = tmp file in the same directory, `fsync`, `rename` over the target, with retries
+because Windows antivirus can briefly lock a file mid-rename. Reads tolerate a UTF-8 BOM and
+refuse to overwrite a file that does not parse.

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>swaper</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%23050709'/><text y='24' x='4' font-size='20' fill='%2300ff9c' font-family='monospace'>&gt;_</text></svg>">
+</head>
+<body>
+<div class="scan" aria-hidden="true"></div>
+
+<header class="hdr">
+  <div class="hdr-left">
+    <p class="logo"><span class="chev">&gt;_</span>swaper<span class="tag">// claude account switcher</span></p>
+    <p class="prompt"><span class="usr">root@claude</span>:<span class="pth">~</span>$ swaper --watch<span class="cursor"></span></p>
+  </div>
+
+  <nav class="hdr-right">
+    <span class="stale" id="stale" aria-live="polite"></span>
+    <button class="btn" id="btn-refresh">[<span class="k">r</span>] refresh</button>
+    <button class="btn btn-key" id="btn-import" title="Guarda la cuenta con la que tienes sesión ahora. Shift+clic: importar desde una carpeta CLAUDE_CONFIG_DIR">[<span class="k">i</span>] import</button>
+  </nav>
+</header>
+
+<div class="alert alert-warn" id="banner-running" hidden>
+  <span class="alert-tag">WARN</span>
+  Claude Code en ejecución — el swap aplica a sesiones <b>nuevas</b>. Cierra y reabre Claude.
+</div>
+<div class="alert alert-err" id="banner-offline" hidden>
+  <span class="alert-tag">DOWN</span>
+  sin respuesta del daemon local — ¿se ha cerrado <code>node server.js</code>?
+</div>
+
+<main class="board">
+  <div class="board-head" id="board-head" hidden>
+    <span></span>
+    <span>account</span>
+    <span>plan</span>
+    <span>session · 5h</span>
+    <span>week · 7d</span>
+    <span></span>
+  </div>
+  <div id="rows" class="rows" aria-busy="true"></div>
+</main>
+
+<section class="empty" id="empty" hidden>
+  <pre class="empty-art">  ┌─────────────────────────────┐
+  │   0 cuentas registradas     │
+  └─────────────────────────────┘</pre>
+  <p>
+    Por cada cuenta: abre una terminal, ejecuta <code>claude</code>, escribe <code>/login</code>,
+    entra con esa cuenta, sal con <code>/exit</code> y pulsa <b>[i] import</b>.<br>
+    Se hace una vez por cuenta. Después, solo <b>SWAP</b>.
+  </p>
+  <div class="empty-actions">
+    <button class="btn btn-key" id="btn-import-empty">[i] importar cuenta actual</button>
+  </div>
+</section>
+
+
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<template id="tpl-row">
+  <article class="row">
+    <span class="led" aria-hidden="true"></span>
+
+    <div class="who">
+      <span class="name"></span>
+      <span class="mail"></span>
+    </div>
+
+    <span class="plan"></span>
+
+    <div class="gauge" data-kind="session">
+      <div class="gauge-top">
+        <span class="bar"></span>
+        <span class="pct"></span>
+      </div>
+      <span class="rst"></span>
+    </div>
+
+    <div class="gauge" data-kind="weekly">
+      <div class="gauge-top">
+        <span class="bar"></span>
+        <span class="pct"></span>
+      </div>
+      <span class="rst"></span>
+    </div>
+
+    <div class="act">
+      <button class="btn btn-swap">SWAP</button>
+      <span class="inuse">IN USE</span>
+      <button class="btn btn-x" title="quitar del dashboard" aria-label="quitar">×</button>
+    </div>
+
+    <p class="row-err" hidden></p>
+  </article>
+</template>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>
