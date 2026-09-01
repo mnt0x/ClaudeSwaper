@@ -396,3 +396,139 @@ setInterval(() => { if (!swapping) refresh(false); }, POLL_MS);
 // API call every time.
 renderSkeletons();
 refresh(false);
+
+/* =====================================================================
+   Osciloscopio de fondo + logo-traza. ADITIVO: no toca la logica de arriba.
+   Una sola firma, barata: rejilla cacheada (offscreen, se dibuja una vez por
+   resize) + haz de barrido; el logo #i-swap recorrido por un punto de luz al
+   MISMO reloj. Se para en visibilitychange (document.hidden) y no arranca en
+   prefers-reduced-motion (dibuja un unico frame estatico y deja el logo solido).
+   ===================================================================== */
+(() => {
+  const canvas = document.getElementById('scope-bg');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const logo = document.getElementById('logo-swap');
+  // Mismo matchMedia que escucha el CSS, para no discrepar del piso de calidad.
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  const GREEN = '0, 255, 156';   // canal de sesion
+  const PURPLE = '124, 92, 255'; // canal de semana
+
+  // Rejilla cacheada en un canvas offscreen: se dibuja una sola vez por resize.
+  const grid = document.createElement('canvas');
+  const gctx = grid.getContext('2d');
+  let W = 0, H = 0, dpr = 1;
+  let raf = 0, last = 0, t0 = 0;
+
+  function buildGrid() {
+    dpr = Math.min(1.5, window.devicePixelRatio || 1); // dpr limitado: barato
+    W = canvas.clientWidth;
+    H = canvas.clientHeight;
+    canvas.width = grid.width = Math.max(1, Math.round(W * dpr));
+    canvas.height = grid.height = Math.max(1, Math.round(H * dpr));
+    gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    gctx.clearRect(0, 0, W, H);
+
+    const step = 34;
+    gctx.lineWidth = 1;
+    // Verticales verde: mas presentes hacia los margenes (los datos van sobre
+    // superficie opaca, asi que la rejilla no compite en el centro).
+    for (let x = 0; x <= W; x += step) {
+      const edge = 1 - Math.min(x, W - x) / (W / 2 || 1); // 0 centro -> ~1 borde
+      const a = 0.035 + 0.06 * edge;
+      gctx.strokeStyle = `rgba(${GREEN}, ${a.toFixed(3)})`;
+      gctx.beginPath();
+      gctx.moveTo(x + 0.5, 0);
+      gctx.lineTo(x + 0.5, H);
+      gctx.stroke();
+    }
+    // Horizontales morado, tenues y parejas (segundo canal).
+    gctx.strokeStyle = `rgba(${PURPLE}, 0.04)`;
+    for (let y = 0; y <= H; y += step) {
+      gctx.beginPath();
+      gctx.moveTo(0, y + 0.5);
+      gctx.lineTo(W, y + 0.5);
+      gctx.stroke();
+    }
+    // Linea de base del instrumento, algo mas marcada.
+    gctx.strokeStyle = `rgba(${GREEN}, 0.09)`;
+    gctx.beginPath();
+    const mid = Math.round(H / 2) + 0.5;
+    gctx.moveTo(0, mid);
+    gctx.lineTo(W, mid);
+    gctx.stroke();
+  }
+
+  function frame(now) {
+    raf = requestAnimationFrame(frame);
+    if (now - last < 32) return; // throttle ~30fps: salta el frame
+    last = now;
+    const t = (now - t0) / 1000;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    // Rejilla que respira: solo clear + drawImage(rejilla) con alpha oscilante.
+    ctx.globalAlpha = 0.72 + 0.28 * (0.5 + 0.5 * Math.sin(t * 0.6));
+    ctx.drawImage(grid, 0, 0, W, H);
+    ctx.globalAlpha = 1;
+
+    // Haz de barrido horizontal con estela y borde de ataque brillante.
+    const period = 7;
+    const p = (t % period) / period;
+    const x = p * (W + 160) - 80;
+    const trail = 150;
+    const tg = ctx.createLinearGradient(x - trail, 0, x, 0);
+    tg.addColorStop(0, `rgba(${GREEN}, 0)`);
+    tg.addColorStop(1, `rgba(${GREEN}, 0.10)`);
+    ctx.fillStyle = tg;
+    ctx.fillRect(x - trail, 0, trail, H);
+    const eg = ctx.createLinearGradient(x - 2, 0, x + 2, 0);
+    eg.addColorStop(0, `rgba(${GREEN}, 0)`);
+    eg.addColorStop(0.5, `rgba(${GREEN}, 0.5)`);
+    eg.addColorStop(1, `rgba(${GREEN}, 0)`);
+    ctx.fillStyle = eg;
+    ctx.fillRect(x - 2, 0, 4, H);
+
+    // Logo-traza: un punto de luz recorre las flechas (dasharray 5 26 sobre ~19.5u
+    // por flecha), al mismo reloj t que el haz.
+    if (logo) logo.style.strokeDashoffset = (-(t * 14) % 31).toFixed(2);
+  }
+
+  function still() {
+    // Un unico frame estatico de rejilla; logo solido con su glow fijo (CSS).
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(grid, 0, 0, W, H);
+    ctx.globalAlpha = 1;
+    if (logo) { logo.style.strokeDasharray = 'none'; logo.style.strokeDashoffset = '0'; }
+  }
+
+  function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
+
+  function start() {
+    stop();
+    if (reduce.matches) { still(); return; } // no arranca en reduced-motion
+    if (document.hidden) return;             // no gasta oculto
+    if (logo) logo.style.strokeDasharray = '5 26';
+    last = 0; t0 = performance.now();
+    raf = requestAnimationFrame(frame);
+  }
+
+  let rt = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => { buildGrid(); if (!raf) still(); }, 150);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stop(); else start();
+  });
+  // Escucha el MISMO media que el CSS: si el usuario lo cambia, congela o revive.
+  reduce.addEventListener('change', start);
+
+  buildGrid();
+  if (reduce.matches || document.hidden) still(); else start();
+})();
+

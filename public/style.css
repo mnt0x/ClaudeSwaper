@@ -1,7 +1,8 @@
-/* ClaudeSwaper — terminal instrument. Operate surface: the tool disappears into the task.
-   Monospace is earned here (every column is a measurement, not decoration); the phosphor
-   palette is the pinned brief. What is NOT earned: fake CRT overlays, Unicode block bars,
-   and motion that conveys nothing. */
+/* ClaudeSwaper — Direccion "Osciloscopio de lujo".
+   Analizador de dos canales sobre identidad de terminal fosforo. La locura vive en UN
+   sitio: el fondo-osciloscopio (canvas, ver app.js) y el logo-traza. El resto, disciplina.
+   Verde #00ff9c = canal de sesion (dominante). Morado #7c5cff = segundo canal (semana),
+   solo en severidad normal, nunca pisando una senal de peligro. */
 
 :root {
   --bg: #040706;
@@ -19,6 +20,12 @@
   --phos: #00ff9c;
   --phos-dim: rgba(0, 255, 156, 0.13);
 
+  /* Segundo canal (morado). El puro solo pinta rellenos/halos; el texto usa la variante
+     clara --phos-2-txt (7.9:1 sobre surface-2). */
+  --phos-2: #7c5cff;
+  --phos-2-txt: #a99bff;
+  --phos-2-dim: rgba(124, 92, 255, 0.13);
+
   --ok: #00ff9c;
   --warn: #ffcc4d;
   --high: #ff9838;
@@ -35,6 +42,7 @@
           Consolas, "DejaVu Sans Mono", monospace;
 
   --sev: var(--ok);
+  --glow: rgba(0, 255, 156, 0.35); /* halo de lectura del canal, por severidad */
 }
 
 * { box-sizing: border-box; }
@@ -55,6 +63,28 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   padding: 0 clamp(1rem, 4vw, 2.5rem) 5rem;
+}
+
+/* Ambiente estatico (no anima): dos brillos de canal en las esquinas, detras de todo.
+   Vive por debajo del canvas del osciloscopio (-2 < -1). */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(115% 80% at 50% -10%, rgba(0, 255, 156, 0.05), transparent 55%),
+    radial-gradient(90% 75% at 100% 100%, rgba(124, 92, 255, 0.05), transparent 55%);
+}
+
+/* El osciloscopio: canvas fijo, barato, DETRAS de todo y jamas interactivo. */
+#scope-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  display: block;
 }
 
 /* Browser surfaces belong to the design too. */
@@ -96,27 +126,52 @@ code {
   margin-bottom: 1.25rem;
 }
 
+/* El logo-traza vive a la izquierda del titulo. */
+.identity { display: flex; align-items: center; gap: 0.8rem; }
+
+/* Pin de osciloscopio: bisel con su propia mini-rejilla. La traza (las flechas) la
+   recorre un punto de luz animado desde app.js (stroke-dashoffset). */
+.scope-pin {
+  flex: none;
+  display: grid; place-items: center;
+  width: 38px; height: 38px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(150deg, rgba(0, 255, 156, 0.06), rgba(124, 92, 255, 0.06)),
+    repeating-linear-gradient(0deg, transparent 0 6px, rgba(0, 255, 156, 0.05) 6px 7px),
+    repeating-linear-gradient(90deg, transparent 0 6px, rgba(0, 255, 156, 0.05) 6px 7px),
+    var(--surface-2);
+  box-shadow: inset 0 0 14px rgba(0, 255, 156, 0.07), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+/* Halo suave del pin (refuerzo estatico tomado de holo-depth): da presencia a la traza
+   sin abrir un segundo motor de animacion. */
+.scope-pin::after {
+  content: ""; position: absolute; inset: -30%;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 255, 156, 0.12), transparent 62%);
+  pointer-events: none;
+}
+.scope-logo {
+  width: 21px; height: 21px;
+  filter: drop-shadow(0 0 5px rgba(0, 255, 156, 0.55));
+  position: relative; /* por encima del halo del pin */
+}
+/* Dos capas: las flechas siempre legibles (base tenue y sólida) y, encima, un punto de
+   luz que las recorre (app.js mueve stroke-dashoffset de la traza). Sin la base, la traza
+   punteada dejaba el logo ilegible en reposo. */
+.logo-base  { color: rgba(0, 255, 156, 0.5); }
+.logo-trace { color: #baffe4; }
+
 .masthead h1 {
   margin: 0;
-  font-size: 22px; font-weight: 700;
+  /* Injerto de kinetic-brutal/holo: mas presencia que 22px fijos, sin romper el tracking. */
+  font-size: clamp(22px, 3.2vw, 30px); font-weight: 700;
   letter-spacing: 0.16em;
   color: var(--phos);
-  display: flex; align-items: baseline; gap: 0.45rem;
+  display: flex; align-items: center; gap: 0.45rem;
 }
-.chev { color: var(--text-3); font-weight: 400; letter-spacing: 0; }
-
-.tagline { margin: 0.5rem 0 0; font-size: 12px; color: var(--text-3); }
-.usr { color: var(--phos); }
-.host { color: var(--text-2); }
-.punc { color: var(--text-3); }
-
-/* The caret is the one piece of ambient motion kept: it marks a live process. */
-.caret {
-  display: inline-block; width: 7px; height: 13px;
-  background: var(--phos); margin-left: 5px; vertical-align: -2px;
-  animation: blink 1.1s steps(2, start) infinite;
-}
-@keyframes blink { 50% { opacity: 0; } }
 
 .toolbar { display: flex; align-items: center; gap: 0.45rem; }
 
@@ -185,12 +240,35 @@ code {
 
 main { max-width: 1180px; margin: 0 auto; }
 
-/* Elevation declared once: a border, no competing shadow. */
+/* Elevacion declarada una vez: borde + una superficie opaca para que la rejilla del
+   fondo quede en los margenes y los datos se lean limpios (chasis del instrumento). */
 .panel {
+  position: relative;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface-1);
   overflow: hidden;
+  box-shadow: 0 1px 0 rgba(0, 255, 156, 0.04) inset, 0 24px 60px -30px rgba(0, 0, 0, 0.9);
+}
+
+/* Filo rim-lit duotono verde->morado, ESTATICO (injerto de holo-depth). Ata el lenguaje
+   del bisel del pin a la superficie plana del panel sin abrir un segundo gesto ambiental
+   ni usar backdrop-filter. Solo se pinta si el navegador sabe recortar el anillo; si no,
+   se degrada a nada (el borde solido del .panel se mantiene). */
+@supports ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+  .panel::after {
+    content: ""; position: absolute; inset: 0; z-index: 1;
+    border-radius: inherit; pointer-events: none;
+    padding: 1px;
+    background: linear-gradient(150deg,
+      rgba(0, 255, 156, 0.42) 0%,
+      rgba(124, 92, 255, 0.32) 55%,
+      rgba(124, 92, 255, 0) 88%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask-composite: exclude;
+  }
 }
 
 .columns,
@@ -269,14 +347,21 @@ main { max-width: 1180px; margin: 0 auto; }
   white-space: nowrap;
 }
 
-/* ---------- meters: segmented, because this is a measuring instrument ---------- */
+/* ---------- meters: dos canales del osciloscopio ----------
+   Canal 1 (session) = verde fosforo. Canal 2 (weekly) = morado en severidad normal.
+   Las severidades de peligro (medium/high/critical) mandan siempre y son iguales en
+   ambos canales: el morado nunca sustituye a una alerta. */
 
 .meter { min-width: 0; display: flex; flex-direction: column; gap: 0.34rem; }
-.meter[data-sev="normal"]   { --sev: var(--ok); }
-.meter[data-sev="medium"]   { --sev: var(--warn); }
-.meter[data-sev="high"]     { --sev: var(--high); }
-.meter[data-sev="critical"] { --sev: var(--crit); }
-.meter[data-sev="unknown"]  { --sev: var(--line-strong); }
+.meter[data-sev="normal"]   { --sev: var(--ok);   --glow: rgba(0, 255, 156, 0.35); }
+.meter[data-sev="medium"]   { --sev: var(--warn); --glow: rgba(255, 204, 77, 0.32); }
+.meter[data-sev="high"]     { --sev: var(--high); --glow: rgba(255, 152, 56, 0.32); }
+.meter[data-sev="critical"] { --sev: var(--crit); --glow: rgba(255, 92, 114, 0.32); }
+.meter[data-sev="unknown"]  { --sev: var(--line-strong); --glow: transparent; }
+
+/* Segundo canal: la semana sana se pinta en morado (identidad de canal, no de estado). */
+.meter[data-kind="weekly"][data-sev="normal"] { --sev: var(--phos-2); --glow: rgba(124, 92, 255, 0.4); }
+.meter[data-kind="weekly"][data-sev="normal"] .value { color: var(--phos-2-txt); }
 
 .meter-line { display: flex; align-items: center; gap: 0.6rem; }
 
@@ -284,10 +369,23 @@ main { max-width: 1180px; margin: 0 auto; }
   font-size: 13px; font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--sev);
+  /* Halo de lectura de fosforo: el nucleo del glifo no cambia, asi que el contraste AA
+     se mantiene; el halo solo da el brillo de instrumento. */
+  text-shadow: 0 0 12px var(--glow);
   min-width: 3.2em; flex: none;
   text-align: right;
 }
-.meter[data-sev="unknown"] .value { color: var(--text-3); }
+.meter[data-sev="unknown"] .value { color: var(--text-3); text-shadow: none; }
+
+/* Injerto de kinetic-brutal (numero heroe, sin odometer ni ticker): SOLO el canal de
+   sesion de la fila activa sube de tamano. Da un foco de dato con WOW y le presta al
+   canal dominante la personalidad tipografica que le faltaba. El color sigue siendo
+   var(--sev), asi que el contraste AA del glifo no cambia. */
+.row.is-active .meter[data-kind="session"] .value {
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
 
 /* The segment comb is a mask over both track and fill, so the cells line up exactly
    and no glyph is standing in for a graphic. */
@@ -304,8 +402,10 @@ main { max-width: 1180px; margin: 0 auto; }
   transform: scaleX(0);
   transform-origin: left center;
   background: var(--sev);
-  /* transform, not width: the compositor handles it and no layout is triggered. */
-  transition: transform 480ms var(--ease), background-color var(--dur) var(--ease);
+  /* transform, not width: the compositor handles it and no layout is triggered.
+     steps() en el llenado = latido mecanico, honestidad de instrumento (injerto de
+     kinetic-brutal, mejor aqui que en una rejilla brutalista). */
+  transition: transform 520ms steps(16, end), background-color var(--dur) var(--ease);
 }
 
 .resets { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
@@ -490,6 +590,20 @@ main { max-width: 1180px; margin: 0 auto; }
   .sync { width: 100%; margin: 0 0 0.2rem; }
 }
 
+/* 360px explicito (injerto de kinetic-brutal): ademas de apilar, encoger el numero
+   heroe y aflojar los margenes para que nada se salga ni se corte. */
+@media (max-width: 380px) {
+  body { padding-left: 0.75rem; padding-right: 0.75rem; }
+  .identity { gap: 0.6rem; }
+  .row { gap: 0.6rem 0.55rem; }
+  .row.is-active .meter[data-kind="session"] .value { font-size: 16px; }
+  .value { font-size: 12.5px; min-width: 2.8em; }
+  .field-line input { min-width: 0; }
+  .toasts { right: 0.75rem; bottom: 0.75rem; }
+}
+
+/* Piso de calidad: congela TODA animacion ambiental. El canvas del osciloscopio y la
+   traza del logo se paran desde app.js (no arrancan si esto esta activo). */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;

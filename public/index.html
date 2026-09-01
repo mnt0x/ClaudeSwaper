@@ -10,6 +10,11 @@
 </head>
 <body>
 
+<!-- Fondo-osciloscopio: canvas fijo, barato, DETRAS de todo (z-index:-1) y jamas
+     interactivo (pointer-events:none). Lo dibuja app.js; se para oculto y no arranca
+     en prefers-reduced-motion. -->
+<canvas id="scope-bg" aria-hidden="true"></canvas>
+
 <!-- Icon set: one library, one stroke weight, referenced by <use>. -->
 <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
   <defs>
@@ -33,13 +38,12 @@
 
 <header class="masthead">
   <div class="identity">
-    <div>
-      <h1><span class="chev" aria-hidden="true">&gt;_</span>swaper</h1>
-      <p class="tagline">
-        <span class="usr">claude</span><span class="punc">@</span><span class="host">local</span><span class="punc">:~$</span>
-        swaper --watch<span class="caret" aria-hidden="true"></span>
-      </p>
+    <!-- Logo de ClaudeSwaper: las dobles flechas #i-swap como traza viva de osciloscopio
+         dentro de un pin con su mini-rejilla. Un punto de luz la recorre (app.js). -->
+    <div class="scope-pin" aria-hidden="true">
+      <svg class="scope-logo" viewBox="0 0 18 18" focusable="false"><use class="logo-base" href="#i-swap"/><use class="logo-trace" id="logo-swap" href="#i-swap"/></svg>
     </div>
+    <h1>Swaper</h1>
   </div>
 
   <div class="toolbar">
