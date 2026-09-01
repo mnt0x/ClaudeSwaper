@@ -1,8 +1,7 @@
-/* ClaudeSwaper — Direccion "Osciloscopio de lujo".
-   Analizador de dos canales sobre identidad de terminal fosforo. La locura vive en UN
-   sitio: el fondo-osciloscopio (canvas, ver app.js) y el logo-traza. El resto, disciplina.
-   Verde #00ff9c = canal de sesion (dominante). Morado #7c5cff = segundo canal (semana),
-   solo en severidad normal, nunca pisando una senal de peligro. */
+/* ClaudeSwaper — instrumento de terminal, monocromo fosforo.
+   Un solo color de marca: el verde #00ff9c. El unico segundo lenguaje de color es la rampa
+   de severidad (ambar -> naranja -> rojo) que solo aparece cuando una barra se llena: el
+   color de una barra ES su estado, se lee de un vistazo. Fondo: una malla verde animada. */
 
 :root {
   --bg: #040706;
@@ -19,12 +18,6 @@
 
   --phos: #00ff9c;
   --phos-dim: rgba(0, 255, 156, 0.13);
-
-  /* Segundo canal (morado). El puro solo pinta rellenos/halos; el texto usa la variante
-     clara --phos-2-txt (7.9:1 sobre surface-2). */
-  --phos-2: #7c5cff;
-  --phos-2-txt: #a99bff;
-  --phos-2-dim: rgba(124, 92, 255, 0.13);
 
   --ok: #00ff9c;
   --warn: #ffcc4d;
@@ -65,42 +58,48 @@ body {
   padding: 0 clamp(1rem, 4vw, 2.5rem) 5rem;
 }
 
-/* ---------- fondo a pantalla completa ----------
-   Aurora de dos canales sobre negro: dos halos difusos —verde y morado— a la deriva en
-   orbitas lentas y distintas, solo CSS (sin canvas, sin JS). Nada de rejilla, nada de
-   bordes duros. Viven detras de todo (pointer-events:none) y no tocan el contraste: los
-   datos van sobre superficie opaca. La suma de bg-glow al fondo asienta el centro. */
+/* ---------- fondo: malla verde viva a pantalla completa ----------
+   Dos capas de halos de fosforo que se mueven de verdad —orbitas amplias, velocidades
+   distintas— y se cruzan, asi que el fondo ONDULA en lugar de quedarse quieto. Solo CSS,
+   detras de todo (pointer-events:none). Todo en verde: ni un tono fuera de la marca. Los
+   datos viven sobre superficie opaca, asi que el brillo nunca les roba contraste. */
 body::before {
   content: "";
   position: fixed;
-  inset: -30%;
+  inset: -45%;
   z-index: -2;
   pointer-events: none;
-  background: radial-gradient(38% 42% at 32% 30%, rgba(0, 255, 156, 0.16), transparent 66%);
-  filter: blur(38px);
-  animation: aurora-a 26s ease-in-out infinite;
+  background:
+    radial-gradient(32% 34% at 28% 30%, rgba(0, 255, 156, 0.22), transparent 60%),
+    radial-gradient(30% 30% at 68% 42%, rgba(28, 224, 158, 0.16), transparent 62%),
+    radial-gradient(38% 36% at 52% 82%, rgba(0, 255, 156, 0.13), transparent 64%);
+  filter: blur(48px);
+  animation: mesh-a 15s ease-in-out infinite;
   will-change: transform;
 }
 body::after {
   content: "";
   position: fixed;
-  inset: -30%;
+  inset: -45%;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(40% 44% at 70% 74%, rgba(124, 92, 255, 0.15), transparent 68%);
-  filter: blur(42px);
-  animation: aurora-b 34s ease-in-out infinite;
+  background:
+    radial-gradient(28% 30% at 80% 20%, rgba(0, 255, 156, 0.16), transparent 60%),
+    radial-gradient(30% 32% at 18% 74%, rgba(20, 200, 150, 0.13), transparent 62%);
+  filter: blur(54px);
+  animation: mesh-b 20s ease-in-out infinite;
   will-change: transform;
 }
-@keyframes aurora-a {
-  0%   { transform: translate3d(-6%, -4%, 0) scale(1.05); }
-  50%  { transform: translate3d(7%, 6%, 0) scale(1.18); }
-  100% { transform: translate3d(-6%, -4%, 0) scale(1.05); }
+@keyframes mesh-a {
+  0%   { transform: translate3d(-14%, -9%, 0) scale(1);    }
+  33%  { transform: translate3d(11%, 7%, 0)   scale(1.18); }
+  66%  { transform: translate3d(-7%, 13%, 0)  scale(1.08); }
+  100% { transform: translate3d(-14%, -9%, 0) scale(1);    }
 }
-@keyframes aurora-b {
-  0%   { transform: translate3d(6%, 7%, 0) scale(1.12); }
-  50%  { transform: translate3d(-7%, -5%, 0) scale(1.02); }
-  100% { transform: translate3d(6%, 7%, 0) scale(1.12); }
+@keyframes mesh-b {
+  0%   { transform: translate3d(12%, 9%, 0)   scale(1.12); }
+  50%  { transform: translate3d(-13%, -7%, 0) scale(1);    }
+  100% { transform: translate3d(12%, 9%, 0)   scale(1.12); }
 }
 
 /* Browser surfaces belong to the design too. */
@@ -156,7 +155,7 @@ code {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(150deg, rgba(0, 255, 156, 0.06), rgba(124, 92, 255, 0.06)),
+    linear-gradient(150deg, rgba(0, 255, 156, 0.09), rgba(0, 255, 156, 0.02)),
     repeating-linear-gradient(0deg, transparent 0 6px, rgba(0, 255, 156, 0.05) 6px 7px),
     repeating-linear-gradient(90deg, transparent 0 6px, rgba(0, 255, 156, 0.05) 6px 7px),
     var(--surface-2);
@@ -280,8 +279,8 @@ main { max-width: 1180px; margin: 0 auto; }
   box-shadow: 0 1px 0 rgba(0, 255, 156, 0.04) inset, 0 24px 60px -30px rgba(0, 0, 0, 0.9);
 }
 
-/* Filo rim-lit duotono verde->morado, ESTATICO (injerto de holo-depth). Ata el lenguaje
-   del bisel del pin a la superficie plana del panel sin abrir un segundo gesto ambiental
+/* Filo rim-lit de fosforo que se desvanece, ESTATICO. Ata el lenguaje del bisel del pin
+   a la superficie plana del panel sin abrir un segundo gesto ambiental
    ni usar backdrop-filter. Solo se pinta si el navegador sabe recortar el anillo; si no,
    se degrada a nada (el borde solido del .panel se mantiene). */
 @supports ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
@@ -290,9 +289,9 @@ main { max-width: 1180px; margin: 0 auto; }
     border-radius: inherit; pointer-events: none;
     padding: 1px;
     background: linear-gradient(150deg,
-      rgba(0, 255, 156, 0.42) 0%,
-      rgba(124, 92, 255, 0.32) 55%,
-      rgba(124, 92, 255, 0) 88%);
+      rgba(0, 255, 156, 0.45) 0%,
+      rgba(0, 255, 156, 0.12) 55%,
+      rgba(0, 255, 156, 0) 88%);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
             mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -376,21 +375,16 @@ main { max-width: 1180px; margin: 0 auto; }
   white-space: nowrap;
 }
 
-/* ---------- meters: dos canales del osciloscopio ----------
-   Canal 1 (session) = verde fosforo. Canal 2 (weekly) = morado en severidad normal.
-   Las severidades de peligro (medium/high/critical) mandan siempre y son iguales en
-   ambos canales: el morado nunca sustituye a una alerta. */
-
+/* ---------- meters ----------
+   El color de la barra ES su estado, igual en sesion y en semana: verde mientras hay
+   margen, y sube por ambar -> naranja -> rojo segun se llena. Sin colores decorativos:
+   un tono distinto siempre significa algo. */
 .meter { min-width: 0; display: flex; flex-direction: column; gap: 0.34rem; }
 .meter[data-sev="normal"]   { --sev: var(--ok);   --glow: rgba(0, 255, 156, 0.35); }
 .meter[data-sev="medium"]   { --sev: var(--warn); --glow: rgba(255, 204, 77, 0.32); }
 .meter[data-sev="high"]     { --sev: var(--high); --glow: rgba(255, 152, 56, 0.32); }
 .meter[data-sev="critical"] { --sev: var(--crit); --glow: rgba(255, 92, 114, 0.32); }
 .meter[data-sev="unknown"]  { --sev: var(--line-strong); --glow: transparent; }
-
-/* Segundo canal: la semana sana se pinta en morado (identidad de canal, no de estado). */
-.meter[data-kind="weekly"][data-sev="normal"] { --sev: var(--phos-2); --glow: rgba(124, 92, 255, 0.4); }
-.meter[data-kind="weekly"][data-sev="normal"] .value { color: var(--phos-2-txt); }
 
 .meter-line { display: flex; align-items: center; gap: 0.6rem; }
 
