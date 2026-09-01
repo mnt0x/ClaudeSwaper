@@ -65,26 +65,42 @@ body {
   padding: 0 clamp(1rem, 4vw, 2.5rem) 5rem;
 }
 
-/* Ambiente estatico (no anima): dos brillos de canal en las esquinas, detras de todo.
-   Vive por debajo del canvas del osciloscopio (-2 < -1). */
+/* ---------- fondo a pantalla completa ----------
+   Aurora de dos canales sobre negro: dos halos difusos —verde y morado— a la deriva en
+   orbitas lentas y distintas, solo CSS (sin canvas, sin JS). Nada de rejilla, nada de
+   bordes duros. Viven detras de todo (pointer-events:none) y no tocan el contraste: los
+   datos van sobre superficie opaca. La suma de bg-glow al fondo asienta el centro. */
 body::before {
   content: "";
   position: fixed;
-  inset: 0;
+  inset: -30%;
   z-index: -2;
   pointer-events: none;
-  background:
-    radial-gradient(115% 80% at 50% -10%, rgba(0, 255, 156, 0.05), transparent 55%),
-    radial-gradient(90% 75% at 100% 100%, rgba(124, 92, 255, 0.05), transparent 55%);
+  background: radial-gradient(38% 42% at 32% 30%, rgba(0, 255, 156, 0.16), transparent 66%);
+  filter: blur(38px);
+  animation: aurora-a 26s ease-in-out infinite;
+  will-change: transform;
 }
-
-/* El osciloscopio: canvas fijo, barato, DETRAS de todo y jamas interactivo. */
-#scope-bg {
+body::after {
+  content: "";
   position: fixed;
-  inset: 0;
+  inset: -30%;
   z-index: -1;
   pointer-events: none;
-  display: block;
+  background: radial-gradient(40% 44% at 70% 74%, rgba(124, 92, 255, 0.15), transparent 68%);
+  filter: blur(42px);
+  animation: aurora-b 34s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes aurora-a {
+  0%   { transform: translate3d(-6%, -4%, 0) scale(1.05); }
+  50%  { transform: translate3d(7%, 6%, 0) scale(1.18); }
+  100% { transform: translate3d(-6%, -4%, 0) scale(1.05); }
+}
+@keyframes aurora-b {
+  0%   { transform: translate3d(6%, 7%, 0) scale(1.12); }
+  50%  { transform: translate3d(-7%, -5%, 0) scale(1.02); }
+  100% { transform: translate3d(6%, 7%, 0) scale(1.12); }
 }
 
 /* Browser surfaces belong to the design too. */
@@ -152,12 +168,25 @@ code {
   content: ""; position: absolute; inset: -30%;
   background: radial-gradient(circle at 50% 50%, rgba(0, 255, 156, 0.12), transparent 62%);
   pointer-events: none;
+  animation: pin-glow 4.5s ease-in-out infinite alternate; /* halo que respira */
 }
+@keyframes pin-glow { from { opacity: 0.55; } to { opacity: 1; } }
+
 .scope-logo {
   width: 21px; height: 21px;
   filter: drop-shadow(0 0 5px rgba(0, 255, 156, 0.55));
   position: relative; /* por encima del halo del pin */
+  transform-origin: 50% 50%;
+  /* Las flechas hacen el gesto que nombran: un giro de 180 (intercambio), pausa, y otro
+     180 que completa la vuelta. Significa "swap", no es un girito de gadget. */
+  animation: logo-swap 5.5s var(--ease) infinite;
 }
+@keyframes logo-swap {
+  0%, 32%  { transform: rotate(0turn); }
+  46%, 82% { transform: rotate(0.5turn); }
+  100%     { transform: rotate(1turn); }
+}
+.scope-pin:hover .scope-logo { filter: drop-shadow(0 0 9px rgba(0, 255, 156, 0.9)); }
 /* Dos capas: las flechas siempre legibles (base tenue y sólida) y, encima, un punto de
    luz que las recorre (app.js mueve stroke-dashoffset de la traza). Sin la base, la traza
    punteada dejaba el logo ilegible en reposo. */
@@ -541,158 +570,6 @@ main { max-width: 1180px; margin: 0 auto; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(10px); } }
 @keyframes toast-out { to { opacity: 0; transform: translateY(6px); } }
 
-/* ========================================================================
-   Puesto de mando. ADITIVO. Foco de la cuenta activa con dos gauges radiales
-   SVG (FIRMA), tira de KPIs y readout del backend. Todas las superficies son
-   opacas (surface-1) para que la rejilla del osciloscopio viva en los margenes
-   y los datos se lean limpios.
-   ======================================================================== */
-
-.cmd { max-width: 1180px; margin: 0 auto 1.25rem; display: grid; gap: 1rem; }
-
-/* --- Foco de la cuenta activa --- */
-.focus {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 1.4rem 2rem;
-  padding: 1.4rem 1.5rem 1.4rem 1.7rem;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-  background:
-    radial-gradient(130% 150% at 0% 0%, rgba(0, 255, 156, 0.05), transparent 60%),
-    var(--surface-1);
-  box-shadow: 0 1px 0 rgba(0, 255, 156, 0.04) inset, 0 24px 60px -30px rgba(0, 0, 0, 0.9);
-}
-/* Barra de fosforo a la izquierda: mismo lenguaje que la fila activa, aqui es el heroe. */
-.focus[data-state="active"]::before {
-  content: ""; position: absolute; inset: 0 auto 0 0; width: 2px;
-  background: var(--phos); box-shadow: 0 0 12px rgba(0, 255, 156, 0.5);
-}
-
-.focus-id { min-width: 0; display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; }
-.focus-dot {
-  flex: none; width: 9px; height: 9px; border-radius: 50%;
-  background: var(--phos); box-shadow: 0 0 10px var(--phos);
-}
-.focus[data-state="none"] .focus-dot { background: var(--line-strong); box-shadow: none; }
-.focus-head { min-width: 0; flex: 1 1 12rem; }
-.focus-name {
-  margin: 0;
-  font-size: clamp(18px, 2.6vw, 24px); font-weight: 700; letter-spacing: 0.02em;
-  color: var(--text);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.focus-sub {
-  margin: 0.2rem 0 0; font-size: 12px; color: var(--text-3);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.focus-plan {
-  flex: none; align-self: center;
-  font-size: 11px; letter-spacing: 0.05em;
-  color: var(--phos);
-  border: 1px solid rgba(0, 255, 156, 0.3);
-  background: var(--phos-dim);
-  border-radius: var(--r-sm);
-  padding: 0.22rem 0.55rem;
-  white-space: nowrap;
-}
-.focus-note { grid-column: 1 / -1; margin: 0.1rem 0 0; font-size: 12px; color: var(--text-3); }
-.focus-note[data-tone="warn"] { color: #e6d9a8; }
-.focus-note[data-tone="error"] { color: #f4b6bf; }
-
-/* --- FIRMA: gauges radiales duales (sesion verde / semana morado) --- */
-.gauges { display: flex; gap: 1.6rem; justify-content: center; flex-wrap: wrap; }
-.gauge {
-  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
-  --sev: var(--ok); --glow: rgba(0, 255, 156, 0.35);
-}
-.gauge[data-sev="normal"]   { --sev: var(--ok);   --glow: rgba(0, 255, 156, 0.35); }
-.gauge[data-sev="medium"]   { --sev: var(--warn); --glow: rgba(255, 204, 77, 0.32); }
-.gauge[data-sev="high"]     { --sev: var(--high); --glow: rgba(255, 152, 56, 0.32); }
-.gauge[data-sev="critical"] { --sev: var(--crit); --glow: rgba(255, 92, 114, 0.32); }
-.gauge[data-sev="unknown"]  { --sev: var(--line-strong); --glow: transparent; }
-/* Segundo canal: la semana sana es morado (identidad de canal). El puro solo en el arco
-   y el halo; el numero usa la variante clara --phos-2-txt, nunca #7c5cff en texto. */
-.gauge[data-kind="weekly"][data-sev="normal"] { --sev: var(--phos-2); --glow: rgba(124, 92, 255, 0.45); }
-.gauge[data-kind="weekly"][data-sev="normal"] .gauge-num { color: var(--phos-2-txt); }
-
-.gauge-ring { position: relative; width: 118px; height: 118px; }
-.gauge-svg { width: 100%; height: 100%; display: block; }
-.gauge-track { fill: none; stroke: #14211c; stroke-width: 9; }
-.gauge-arc {
-  fill: none; stroke: var(--sev); stroke-width: 9; stroke-linecap: round;
-  stroke-dasharray: 326.73; stroke-dashoffset: 326.73;
-  transform: rotate(-90deg); transform-box: fill-box; transform-origin: center;
-  filter: drop-shadow(0 0 6px var(--glow));
-  transition: stroke-dashoffset 700ms var(--ease), stroke var(--dur) var(--ease);
-}
-.gauge[data-sev="unknown"] .gauge-arc { filter: none; }
-.gauge-num {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: var(--sev); text-shadow: 0 0 14px var(--glow);
-}
-.gauge[data-sev="unknown"] .gauge-num { color: var(--text-3); text-shadow: none; }
-.gauge-unit { font-size: 13px; font-weight: 600; color: var(--text-3); margin-left: 1px; }
-.gauge-cap { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; text-align: center; }
-.gauge-label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); }
-.gauge-cap .resets { text-align: center; }
-
-/* --- Tira de KPIs (derivados en cliente de accounts + usageById) ---
-   Los numeros VIVEN en --text; la severidad solo toca el color en 'en cola' y nunca es
-   morado (el unico #7c5cff puro de la pagina es el arco/halo del gauge de semana). */
-.kpis {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; grid-template-columns: repeat(4, 1fr);
-  gap: 1px; background: var(--line);
-  border: 1px solid var(--line); border-radius: var(--r-md);
-  overflow: hidden;
-}
-.kpi {
-  min-width: 0;
-  background: var(--surface-1);
-  padding: 0.85rem 1rem;
-  display: flex; flex-direction: column; gap: 0.28rem;
-}
-.kpi-label { font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--text-3); }
-.kpi-val {
-  font-size: 18px; font-weight: 700; letter-spacing: 0.01em;
-  font-variant-numeric: tabular-nums; color: var(--text);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.kpi-val.kpi-reset { font-size: 14px; }
-.kpi-sub { font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kpi[data-tone="ok"] .kpi-val { color: var(--phos); text-shadow: 0 0 12px rgba(0, 255, 156, 0.3); }
-.kpi[data-tone="warn"] .kpi-val { color: var(--warn); text-shadow: 0 0 12px rgba(255, 204, 77, 0.28); }
-
-/* --- Readout del backend (health) --- */
-.readout {
-  max-width: 1180px; margin: 1.25rem auto 0;
-  padding: 0.9rem 1.1rem;
-  border: 1px solid var(--line); border-radius: var(--r-md);
-  background: var(--surface-1);
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: 0.8rem 1.5rem;
-}
-.readout-grid { margin: 0; display: flex; flex-wrap: wrap; gap: 0.75rem 1.6rem; }
-.ro-item { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
-.ro-item dt { font-size: 9.5px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--text-3); }
-.ro-item dd {
-  margin: 0; font-size: 12px; color: var(--text-2);
-  max-width: 34ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.ro-item dd.warn { color: var(--warn); }
-.readout-keys { display: flex; gap: 1rem; font-size: 11px; color: var(--text-3); }
-.readout-keys kbd {
-  font: inherit; font-size: 10.5px; color: var(--text-2);
-  background: var(--surface-2); border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm); padding: 0.05em 0.4em; margin-right: 0.35rem;
-}
-
 /* ---------- narrow: the grid becomes a stack, nothing gets clipped ---------- */
 
 @media (max-width: 940px) {
@@ -721,14 +598,6 @@ main { max-width: 1180px; margin: 0 auto; }
   }
   .meter[data-kind="session"]::before { content: "session · 5h"; }
   .meter[data-kind="weekly"]::before { content: "week · 7d"; }
-
-  /* El foco apila: identidad arriba, gauges debajo alineados a la izquierda. */
-  .focus { grid-template-columns: 1fr; }
-  .gauges { justify-content: flex-start; }
-}
-
-@media (max-width: 720px) {
-  .kpis { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* A 26px hit area is fine for a mouse and too small for a thumb. Grow the target
@@ -754,12 +623,6 @@ main { max-width: 1180px; margin: 0 auto; }
   .value { font-size: 12.5px; min-width: 2.8em; }
   .field-line input { min-width: 0; }
   .toasts { right: 0.75rem; bottom: 0.75rem; }
-
-  .focus { padding: 1.1rem 1rem 1.1rem 1.2rem; }
-  .gauges { gap: 1rem; justify-content: space-between; width: 100%; }
-  .gauge-ring { width: 100px; height: 100px; }
-  .gauge-num { font-size: 22px; }
-  .kpis { grid-template-columns: 1fr 1fr; }
 }
 
 /* Piso de calidad: congela TODA animacion ambiental. El canvas del osciloscopio y la
