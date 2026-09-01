@@ -86,6 +86,24 @@
 </form>
 
 <main>
+  <!-- Puesto de mando: foco de la cuenta activa (gauges radiales duales = firma) +
+       tira de KPIs. Poblado por app.js con datos reales; oculto sin cuentas. -->
+  <section class="cmd" id="cmd" hidden>
+    <div class="focus" id="focus">
+      <div class="focus-id">
+        <span class="focus-dot" aria-hidden="true"></span>
+        <div class="focus-head">
+          <h2 class="focus-name" id="focus-name"></h2>
+          <p class="focus-sub" id="focus-sub"></p>
+        </div>
+        <span class="focus-plan" id="focus-plan" hidden></span>
+      </div>
+      <div class="gauges" id="gauges"></div>
+      <p class="focus-note" id="focus-note" hidden></p>
+    </div>
+    <ul class="kpis" id="kpis" aria-label="Metricas en vivo"></ul>
+  </section>
+
   <div class="panel" id="panel">
     <div class="columns" id="columns" hidden>
       <span>account</span>
@@ -111,6 +129,21 @@
     </button>
   </section>
 </main>
+
+<!-- Readout del backend: estado real de health + atajos. Oculto hasta tener health. -->
+<footer class="readout" id="readout" hidden>
+  <dl class="readout-grid">
+    <div class="ro-item"><dt>node</dt><dd id="ro-node">—</dd></div>
+    <div class="ro-item"><dt>plataforma</dt><dd id="ro-platform">—</dd></div>
+    <div class="ro-item"><dt>credenciales</dt><dd id="ro-cred">—</dd></div>
+    <div class="ro-item"><dt>claude code</dt><dd id="ro-claude">—</dd></div>
+    <div class="ro-item"><dt>datos</dt><dd id="ro-data">—</dd></div>
+  </dl>
+  <div class="readout-keys" aria-hidden="true">
+    <span><kbd>r</kbd>actualizar</span>
+    <span><kbd>i</kbd>importar</span>
+  </div>
+</footer>
 
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 

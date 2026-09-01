@@ -16,6 +16,8 @@ let swapping = false;
 // AbortController of the row confirmation currently open, if any. Also doubles as "a
 // destructive question is on screen", which the keyboard shortcuts must not talk over.
 let openConfirm = null;
+// Ultimo /api/health recibido, para el readout del backend del puesto de mando.
+let lastHealth = null;
 
 /* ---------------- transport ---------------- */
 
@@ -194,6 +196,9 @@ function render() {
   });
 
   for (const account of sorted) rowsEl.append(buildRow(account));
+  renderFocus();
+  renderKpis();
+  renderReadout();
   $('#sync').textContent = syncLabel(lastFetch);
 }
 
@@ -327,6 +332,7 @@ async function refresh(force = false) {
 
     const health = await api('/api/health').catch(() => null);
     $('#banner-running').hidden = !(health && health.claudeRunning);
+    lastHealth = health;
 
     render();
   } catch (err) {
@@ -432,19 +438,19 @@ refresh(false);
 
     const step = 34;
     gctx.lineWidth = 1;
-    // Verticales verde: mas presentes hacia los margenes (los datos van sobre
-    // superficie opaca, asi que la rejilla no compite en el centro).
+    // Verticales verde, PAREJAS por todo el viewport: el fondo es un instrumento a
+    // pantalla completa, no un brillo de esquina. Antes pesaban hacia los margenes y el
+    // centro quedaba lavado, lo que hacia leer la pagina como vacia. Sigue tenue: los
+    // datos van sobre superficie opaca, la rejilla nunca compite con ellos.
+    gctx.strokeStyle = `rgba(${GREEN}, 0.055)`;
     for (let x = 0; x <= W; x += step) {
-      const edge = 1 - Math.min(x, W - x) / (W / 2 || 1); // 0 centro -> ~1 borde
-      const a = 0.035 + 0.06 * edge;
-      gctx.strokeStyle = `rgba(${GREEN}, ${a.toFixed(3)})`;
       gctx.beginPath();
       gctx.moveTo(x + 0.5, 0);
       gctx.lineTo(x + 0.5, H);
       gctx.stroke();
     }
     // Horizontales morado, tenues y parejas (segundo canal).
-    gctx.strokeStyle = `rgba(${PURPLE}, 0.04)`;
+    gctx.strokeStyle = `rgba(${PURPLE}, 0.045)`;
     for (let y = 0; y <= H; y += step) {
       gctx.beginPath();
       gctx.moveTo(0, y + 0.5);
@@ -532,3 +538,186 @@ refresh(false);
   if (reduce.matches || document.hidden) still(); else start();
 })();
 
+
+/* =====================================================================
+   Puesto de mando. ADITIVO: no toca la logica de arriba. Foco de la cuenta
+   activa con dos gauges radiales SVG (firma), tira de KPIs y readout del
+   backend. Se enganchan a render()/refresh() con parches minimos. Datos
+   reales de accounts, usageById y lastHealth; estados vacios con dignidad
+   (sin cuenta activa -> gauges en "—"; sin health -> pie oculto).
+   ===================================================================== */
+
+// Circunferencia del arco (r=52 en el viewBox 120): offset 0% = C (vacio), 100% = 0.
+const GAUGE_C = 2 * Math.PI * 52; // 326.73
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// Cuenta atras compacta para los KPIs: reutiliza countdown() y le quita el prefijo.
+function shortReset(iso) {
+  return countdown(iso).replace(/^Se reinicia en /, '');
+}
+
+// Un gauge radial. data es session/weekly de una NormalizedUsage ok, o null (sin dato).
+function gaugeMarkup(kind, data) {
+  const known = !!data;
+  const sev = known ? data.severity : 'unknown';
+  const pct = known ? Math.max(0, Math.min(100, data.percent)) : 0;
+  const label = kind === 'session' ? 'sesión · 5h' : 'semana · 7d';
+  const offset = (GAUGE_C * (1 - pct / 100)).toFixed(2);
+  const num = known ? `${data.percent}<span class="gauge-unit">%</span>` : '—';
+  const iso = known && data.resetsAt ? data.resetsAt : '';
+  const reset = iso ? countdown(iso) : '';
+  return `
+  <div class="gauge" data-kind="${kind}" data-sev="${sev}" role="img" aria-label="${label}: ${known ? data.percent + '%' : 'sin datos'}">
+    <div class="gauge-ring">
+      <svg viewBox="0 0 120 120" class="gauge-svg" aria-hidden="true">
+        <circle class="gauge-track" cx="60" cy="60" r="52"/>
+        <circle class="gauge-arc" cx="60" cy="60" r="52" style="stroke-dashoffset:${offset}"/>
+      </svg>
+      <div class="gauge-num">${num}</div>
+    </div>
+    <div class="gauge-cap">
+      <span class="gauge-label">${label}</span>
+      <span class="resets" data-resets-at="${iso}">${reset}</span>
+    </div>
+  </div>`;
+}
+
+function renderFocus() {
+  const cmd = document.getElementById('cmd');
+  if (!cmd) return;
+  if (!accounts.length) { cmd.hidden = true; return; }
+  cmd.hidden = false;
+
+  const focus = $('#focus');
+  const note = $('#focus-note');
+  const active = accounts.find((a) => a.isActive);
+
+  if (!active) {
+    focus.dataset.state = 'none';
+    $('#focus-name').textContent = 'Sin cuenta activa';
+    $('#focus-sub').textContent = 'Pulsa swap en una cuenta para ponerla en uso.';
+    $('#focus-plan').hidden = true;
+    $('#gauges').innerHTML = gaugeMarkup('session', null) + gaugeMarkup('weekly', null);
+    note.hidden = true;
+    return;
+  }
+
+  focus.dataset.state = 'active';
+  $('#focus-name').textContent = active.label;
+  $('#focus-sub').textContent = `${active.email || ''}${active.org ? ` · ${active.org}` : ''}`;
+  const plan = $('#focus-plan');
+  plan.hidden = !active.plan;
+  plan.textContent = active.plan || '';
+
+  const usage = usageById[active.id];
+  const usable = usage && usage.ok ? usage : null;
+  $('#gauges').innerHTML = gaugeMarkup('session', usable && usable.session)
+    + gaugeMarkup('weekly', usable && usable.weekly);
+
+  // Mismo criterio que la fila: token caducado / throttle / stale / bloqueo se lee aqui.
+  const n = noteFor(usage);
+  if (n) { note.hidden = false; note.dataset.tone = n.tone; note.textContent = n.text; }
+  else { note.hidden = true; }
+}
+
+// Mejor salto: menor % de sesion entre cuentas REALMENTE swapeables. Excluye la activa,
+// el token caducado, las bloqueadas y las de sesion critica, para no recomendar nunca una
+// cuenta a la que no merece la pena (o no se puede) saltar.
+function bestJump() {
+  let best = null;
+  for (const a of accounts) {
+    if (a.isActive || a.tokenExpired) continue;
+    const u = usageById[a.id];
+    if (!u || !u.ok || u.locked || !u.session || !u.weekly) continue;
+    // Nada que esté a punto de agotarse en NINGUNA ventana: saltar ahí no da margen.
+    if (u.session.severity === 'critical' || u.weekly.severity === 'critical') continue;
+    // El techo real de una cuenta es su ventana más gastada. Rankear por la de sesión sola
+    // recomendaba una cuenta con 3% de sesión pero 98% de semana: fresca por 5 h y agotada
+    // acto seguido. Se rankea por max(sesión, semana) y se nombra la ventana que limita.
+    const worst = Math.max(u.session.percent, u.weekly.percent);
+    if (best === null || worst < best.worst) {
+      best = {
+        label: a.label, plan: a.plan, worst,
+        limitedByWeek: u.weekly.percent >= u.session.percent,
+      };
+    }
+  }
+  return best;
+}
+
+// Reinicio mas cercano: min resetsAt futuro entre TODAS las ventanas (session, weekly,
+// opus y scoped) de cuentas ok. Pasados y NaN descartados. Es el reloj global; el reloj
+// de la cuenta activa vive en el gauge del foco.
+function nearestReset() {
+  let iso = null;
+  let ms = Infinity;
+  for (const a of accounts) {
+    const u = usageById[a.id];
+    if (!u || !u.ok) continue;
+    const segs = [u.session, u.weekly, u.opus, ...(u.scoped || [])];
+    for (const seg of segs) {
+      if (!seg || !seg.resetsAt) continue;
+      const t = Date.parse(seg.resetsAt);
+      if (Number.isFinite(t) && t > Date.now() && t < ms) { ms = t; iso = seg.resetsAt; }
+    }
+  }
+  return iso;
+}
+
+function renderKpis() {
+  const el = document.getElementById('kpis');
+  if (!el) return;
+  if (!accounts.length) { el.innerHTML = ''; return; }
+
+  const total = accounts.length;
+  const best = bestJump();
+  const soonIso = nearestReset();
+
+  // En cola / con problema: sin usage, error, throttle, stale, bloqueo o token caducado.
+  let issues = 0;
+  for (const a of accounts) {
+    const u = usageById[a.id];
+    if (!u || !u.ok || u.throttled || u.stale || u.locked || a.tokenExpired) issues++;
+  }
+
+  const bestSub = best
+    ? `${best.plan ? escapeHtml(best.plan) + ' · ' : ''}${best.worst}% ${best.limitedByWeek ? 'semana' : 'sesión'}`
+    : 'todas en uso o en espera';
+
+  el.innerHTML = [
+    `<li class="kpi"><span class="kpi-label">cuentas</span><span class="kpi-val">${total}</span></li>`,
+    `<li class="kpi"><span class="kpi-label">mejor salto</span><span class="kpi-val">${best ? escapeHtml(best.label) : '—'}</span><span class="kpi-sub">${bestSub}</span></li>`,
+    `<li class="kpi"><span class="kpi-label">próximo reinicio</span><span class="kpi-val kpi-reset" data-resets-at="${soonIso || ''}">${soonIso ? escapeHtml(shortReset(soonIso)) : '—'}</span><span class="kpi-sub">cualquier límite</span></li>`,
+    `<li class="kpi" data-tone="${issues ? 'warn' : 'ok'}"><span class="kpi-label">en cola</span><span class="kpi-val">${issues}</span><span class="kpi-sub">${issues ? 'requieren atención' : 'todas al día'}</span></li>`,
+  ].join('');
+}
+
+function renderReadout() {
+  const el = document.getElementById('readout');
+  if (!el) return;
+  const h = lastHealth;
+  if (!h) { el.hidden = true; return; } // sin conexion / sin health todavia: pie oculto
+  el.hidden = false;
+  const set = (id, val) => { const n = document.getElementById(id); if (n) n.textContent = val; };
+  set('ro-node', h.node || '—');
+  set('ro-platform', h.platform || '—');
+  const cb = h.credentialsBackend;
+  set('ro-cred', cb ? `${cb.kind}${cb.location ? ` · ${cb.location}` : ''}` : '—');
+  const claude = $('#ro-claude');
+  const running = !!h.claudeRunning;
+  claude.textContent = running ? `abierto${h.pids && h.pids.length ? ` · ${h.pids.length}` : ''}` : 'cerrado';
+  claude.classList.toggle('warn', running);
+  set('ro-data', (h.paths && h.paths.data) || '—');
+}
+
+// El KPI de reinicio tiene su propia cuenta atras (forma corta); los gauges ya tican con
+// el intervalo existente porque su cuenta atras lleva la clase .resets. Solo actualiza
+// texto, no anima: sigue vivo tambien en reduced-motion.
+setInterval(() => {
+  for (const el of document.querySelectorAll('#kpis [data-resets-at]')) {
+    if (el.dataset.resetsAt) el.textContent = shortReset(el.dataset.resetsAt);
+  }
+}, 1000);
