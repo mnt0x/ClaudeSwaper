@@ -72,7 +72,7 @@ function syncLabel(ms) {
   return `Actualizado hace ${m} min`;
 }
 
-function fillMeter(meterEl, data) {
+function fillMeter(meterEl, data, extra) {
   const known = !!data;
   meterEl.dataset.sev = known ? data.severity : 'unknown';
   $('.value', meterEl).textContent = known ? `${data.percent}%` : '—';
@@ -84,6 +84,10 @@ function fillMeter(meterEl, data) {
   const resets = $('.resets', meterEl);
   resets.textContent = known ? countdown(data.resetsAt) : '';
   resets.dataset.resetsAt = (known && data.resetsAt) || '';
+  // Scoped limits are weekly figures, so they belong on the weekly meter's own line
+  // rather than costing the row a full extra line of height.
+  resets.dataset.extra = extra || '';
+  if (extra) resets.textContent = resets.textContent ? `${resets.textContent} · ${extra}` : extra;
 }
 
 /* ---------------- rendering ---------------- */
@@ -105,14 +109,13 @@ function renderSkeletons(n = 2) {
 function noteFor(usage) {
   if (!usage) return null;
   if (usage.ok) {
-    const extras = (usage.scoped || []).map((s) => `${s.label} ${s.percent}%`);
     if (usage.locked) return { tone: 'warn', text: `Bloqueado: ${usage.locked}` };
     if (usage.stale) {
       const mins = Math.round((Date.now() - usage.staleSince) / 60000);
       const age = mins >= 1 ? `hace ${mins} min` : 'hace menos de un minuto';
-      return { tone: 'warn', text: [`Datos de ${age}`, ...extras].join(' · ') };
+      return { tone: 'warn', text: `Datos de ${age}` };
     }
-    return extras.length ? { tone: '', text: extras.join(' · ') } : null;
+    return null;
   }
   if (usage.needsRelogin) {
     return { tone: 'error', text: 'Token caducado. Haz /login con esta cuenta y vuelve a importarla.' };
@@ -136,8 +139,9 @@ function buildRow(account) {
   $('.plan', node).textContent = account.plan || '';
 
   const usable = usage && usage.ok ? usage : null;
+  const scoped = usable ? (usable.scoped || []).map((s) => `${s.label} ${s.percent}%`).join(' · ') : '';
   fillMeter($('.meter[data-kind="session"]', node), usable && usable.session);
-  fillMeter($('.meter[data-kind="weekly"]', node), usable && usable.weekly);
+  fillMeter($('.meter[data-kind="weekly"]', node), usable && usable.weekly, scoped);
 
   const note = noteFor(usage);
   const noteEl = $('.row-note', node);
@@ -303,7 +307,10 @@ document.addEventListener('keydown', (e) => {
 // Countdowns tick locally; no API call involved.
 setInterval(() => {
   for (const el of document.querySelectorAll('.resets[data-resets-at]')) {
-    if (el.dataset.resetsAt) el.textContent = countdown(el.dataset.resetsAt);
+    if (!el.dataset.resetsAt) continue;
+    const base = countdown(el.dataset.resetsAt);
+    const extra = el.dataset.extra;
+    el.textContent = extra ? (base ? `${base} · ${extra}` : extra) : base;
   }
   $('#sync').textContent = syncLabel(lastFetch);
 }, 1000);

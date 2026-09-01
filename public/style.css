@@ -403,17 +403,18 @@ main { max-width: 1180px; margin: 0 auto; }
 
 @media (max-width: 940px) {
   .columns { display: none; }
+  /* The plan badge rides the identity line instead of costing a whole grid row. */
   .row {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-areas:
-      "who     actions"
-      "plan    plan"
-      "session session"
-      "weekly  weekly"
-      "note    note";
-    gap: 0.7rem 1rem;
-    padding-top: 0.95rem; padding-bottom: 0.95rem;
+      "who     plan    actions"
+      "session session session"
+      "weekly  weekly  weekly"
+      "note    note    note";
+    gap: 0.7rem 0.75rem;
+    padding-top: 0.9rem; padding-bottom: 0.9rem;
   }
+  .plan { align-self: center; }
   .who { grid-area: who; }
   .plan { grid-area: plan; }
   .meter[data-kind="session"] { grid-area: session; }
