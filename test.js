@@ -269,6 +269,59 @@ async function checkAsync(name, fn) {
     }
   });
 
+  await checkAsync('a primed reading spares the API a second call', async () => {
+    // The swap fetches usage to verify the new token and donates it via prime(); the UI
+    // must then read it from cache. Request amplification is what trips the 429.
+    const account = { id: 'pr1', oauth: { accessToken: 'tok' } };
+    const realFetch = global.fetch;
+    try {
+      usage.invalidate();
+      usage.resetCooldown();
+      usage.prime(account.id, usage.normalize({ limits: [
+        { kind: 'session', percent: 7, resets_at: 'A' },
+        { kind: 'weekly_all', percent: 8, resets_at: 'B' }] }, account.id));
+
+      let called = false;
+      global.fetch = async () => { called = true; throw new Error('must not be called'); };
+      const got = await usage.fetchFor(account);
+      assert.strictEqual(called, false, 'a primed reading must not hit the network');
+      assert.strictEqual(got.session.percent, 7);
+
+      // A failed reading is worthless as a cache entry and must be refused.
+      assert.strictEqual(usage.prime('pr2', { ok: false, error: 'x' }).ok, false);
+    } finally {
+      global.fetch = realFetch;
+      usage.invalidate();
+    }
+  });
+
+  await checkAsync('fetchAll queries accounts one at a time, not as a burst', async () => {
+    const accounts = [1, 2, 3].map((n) => ({ id: `seq${n}`, oauth: { accessToken: 't' } }));
+    const realFetch = global.fetch;
+    let inFlight = 0;
+    let maxInFlight = 0;
+    try {
+      usage.invalidate();
+      usage.resetCooldown();
+      global.fetch = async () => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight--;
+        return {
+          ok: true, status: 200, headers: { get: () => null },
+          text: async () => JSON.stringify({ limits: [{ kind: 'session', percent: 1 }] }),
+        };
+      };
+      const out = await usage.fetchAll(accounts, { force: true });
+      assert.strictEqual(Object.keys(out).length, 3);
+      assert.strictEqual(maxInFlight, 1, `expected serial requests, saw ${maxInFlight} at once`);
+    } finally {
+      global.fetch = realFetch;
+      usage.invalidate();
+    }
+  });
+
   console.log(failures === 0 ? '\nAll checks passed.\n' : `\n${failures} check(s) failed.\n`);
   process.exit(failures === 0 ? 0 : 1);
 })();

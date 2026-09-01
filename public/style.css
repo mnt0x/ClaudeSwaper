@@ -344,3 +344,6 @@ body {
 .row.is-stale .bar,
 .row.is-stale .pct { opacity: 0.55; }
 .row.is-stale .led { background: var(--amb); box-shadow: 0 0 9px var(--amb); }
+
+/* waiting = usage temporarily unavailable (rate limit). The account is fine. */
+.row.is-waiting .led { background: var(--amb); box-shadow: 0 0 9px var(--amb); }

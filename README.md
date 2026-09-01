@@ -168,6 +168,15 @@ Cuando la API no responde, el dashboard **muestra los últimos datos buenos** ma
 (solo porcentajes, sin tokens) para sobrevivir a un reinicio. Un 401/403 sí se muestra como
 error, porque ahí el token está realmente muerto.
 
+Las consultas se hacen **de una en una**, nunca en ráfaga, y solo el botón `[r] refresh` salta
+la caché. Importar, cambiar de cuenta o borrar reutilizan lo que ya hay: cada consulta forzada
+cuesta una llamada **por cuenta**, y esa multiplicación es justo lo que agota la cuota.
+El swap alimenta la caché con el dato que ya obtuvo al verificar el token, así que no se paga
+dos veces por el mismo número.
+
+**Si te sale `Uso no disponible`, la cuenta está bien.** Solo faltan los porcentajes hasta que
+pase la espera; importar y hacer swap siguen funcionando con normalidad.
+
 ---
 
 ## Copias de seguridad

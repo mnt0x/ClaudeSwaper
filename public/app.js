@@ -141,8 +141,11 @@ function buildRow(account) {
       errEl.textContent = `· ${notes.join('  ·  ')}`;
     }
   } else if (usage) {
-    node.classList.add('is-err');
+    // A rate limit says nothing about the account: it still swaps, only the numbers are
+    // unavailable. Painting it red like a broken token would be a lie.
+    node.classList.add(usage.rateLimited ? 'is-waiting' : 'is-err');
     errEl.hidden = false;
+    errEl.style.color = usage.rateLimited ? 'var(--amb)' : '';
     errEl.textContent = usage.needsRelogin
       ? 'token inválido — haz /login con esa cuenta y pulsa [i] import'
       : usage.error || 'no se pudo leer el uso';
@@ -193,7 +196,7 @@ async function removeAccount(account) {
   try {
     await api(`/api/accounts/${account.id}`, { method: 'DELETE' });
     toast(`${account.label} eliminada`);
-    await refresh(true);
+    await refresh(false);
   } catch (err) {
     toast(err.message, 'err');
   }
@@ -211,7 +214,9 @@ async function doSwap(id, button) {
     const result = await api('/api/swap', { method: 'POST', body: { id } });
     toast(`activa: ${result.account.label}`);
     for (const w of result.warnings || []) toast(w);
-    await refresh(true);
+    // The swap already fetched this account's usage to verify the token; the server
+    // seeded its cache with it, so a plain refresh picks it up for free.
+    await refresh(false);
   } catch (err) {
     button.textContent = 'SWAP';
     row.classList.remove('is-busy');
@@ -228,7 +233,7 @@ async function importCurrent(configDir) {
   try {
     const result = await api('/api/accounts/import', { method: 'POST', body: configDir ? { configDir } : {} });
     toast(`importada: ${result.account.email}`);
-    await refresh(true);
+    await refresh(false);
   } catch (err) {
     toast(err.message, 'err');
   } finally {
