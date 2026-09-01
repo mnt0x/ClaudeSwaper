@@ -13,6 +13,9 @@ let accounts = [];
 let usageById = {};
 let lastFetch = 0;
 let swapping = false;
+// AbortController of the row confirmation currently open, if any. Also doubles as "a
+// destructive question is on screen", which the keyboard shortcuts must not talk over.
+let openConfirm = null;
 
 /* ---------------- transport ---------------- */
 
@@ -159,7 +162,12 @@ function buildRow(account) {
     swapBtn.title = `Poner ${account.label} como cuenta activa`;
     swapBtn.addEventListener('click', () => doSwap(account.id, swapBtn));
   }
-  $('.btn-remove', node).addEventListener('click', () => armRemoval(node, account));
+  // Per row, or every remove button in the panel announces the same name and a screen
+  // reader user cannot tell which account they are about to drop.
+  const removeBtn = $('.btn-remove', node);
+  removeBtn.title = `Quitar ${account.label} del dashboard`;
+  removeBtn.setAttribute('aria-label', removeBtn.title);
+  removeBtn.addEventListener('click', () => armRemoval(node, account));
 
   return node;
 }
@@ -170,6 +178,9 @@ function render() {
   $('#panel').hidden = !has;
   $('#columns').hidden = !has;
   rowsEl.setAttribute('aria-busy', 'false');
+  // Every row is about to be replaced, so an open confirmation is answering about a node
+  // that will not exist — drop it and its document-level listeners with it.
+  if (openConfirm) { openConfirm.abort(); openConfirm = null; }
   rowsEl.innerHTML = '';
 
   // Active first, then the least-used session: the next one worth switching to.
@@ -192,28 +203,44 @@ function render() {
  * Destructive, so it asks — inline, in the row itself. A native confirm() cannot be
  * styled, blocks the whole page, and reads as a browser artefact rather than part of
  * the tool. Escape or a click elsewhere backs out.
+ *
+ * One AbortController owns all four listeners, so closing by ANY route drops them all.
+ * {once:true} only fires-and-forgets: closing with Escape left the yes/no handlers
+ * attached, and re-opening on the same row stacked another pair — one click on "sí" then
+ * sent two DELETEs, the second answering 404, so the user saw a success toast and an
+ * error toast for the same removal. It also outlives the row: render() wipes rowsEl, and
+ * the document-level listeners would keep pointing at a detached node.
  */
 function armRemoval(node, account) {
   const confirmEl = $('.confirm', node);
   if (!confirmEl.hidden) return;
 
-  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
-  const onOutside = (e) => { if (!confirmEl.contains(e.target)) close(); };
-  function close() {
+  const ac = new AbortController();
+  const { signal } = ac;
+  const close = () => {
     confirmEl.hidden = true;
     node.classList.remove('is-confirming');
-    document.removeEventListener('keydown', onKey, true);
-    document.removeEventListener('pointerdown', onOutside, true);
-  }
+    if (openConfirm === ac) openConfirm = null;
+    ac.abort();
+  };
 
   confirmEl.hidden = false;
   node.classList.add('is-confirming');
+  // Named, or a screen reader lands on a bare "no" button with no idea what it answers.
+  confirmEl.setAttribute('role', 'group');
+  confirmEl.setAttribute('aria-label', `¿Quitar ${account.label} del dashboard?`);
+  openConfirm = ac;
   $('.btn-no', confirmEl).focus();
-  document.addEventListener('keydown', onKey, true);
-  // Deferred, or the very click that opened this would immediately close it.
-  setTimeout(() => document.addEventListener('pointerdown', onOutside, true), 0);
 
-  $('.btn-no', confirmEl).addEventListener('click', close, { once: true });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); close(); }
+  }, { capture: true, signal });
+  // Deferred, or the very click that opened this would immediately close it.
+  setTimeout(() => document.addEventListener('pointerdown', (e) => {
+    if (!confirmEl.contains(e.target)) close();
+  }, { capture: true, signal }), 0);
+
+  $('.btn-no', confirmEl).addEventListener('click', close, { signal });
   $('.btn-yes', confirmEl).addEventListener('click', async () => {
     close();
     try {
@@ -223,7 +250,7 @@ function armRemoval(node, account) {
     } catch (err) {
       toast(err.message, 'err');
     }
-  }, { once: true });
+  }, { signal });
 }
 
 async function doSwap(id, button) {
@@ -242,10 +269,14 @@ async function doSwap(id, button) {
     // seeded its cache with it, so a plain refresh picks it up for free.
     await refresh(false);
   } catch (err) {
-    row.classList.remove('is-busy');
-    button.classList.remove('is-loading');
     toast(`No se pudo cambiar: ${err.message}`, 'err');
   } finally {
+    // In the finally, not the catch: the swap can succeed and the refresh right after it
+    // still fail (server stopped, machine suspended), and refresh() returns without
+    // re-rendering. The row would then keep pointer-events:none and a spinning icon for
+    // ever. On the success path this node is already detached, so it is a harmless no-op.
+    row.classList.remove('is-busy');
+    button.classList.remove('is-loading');
     swapping = false;
     document.querySelectorAll('.btn-swap').forEach((b) => { b.disabled = false; });
   }
@@ -339,7 +370,11 @@ wireImport($('#btn-import'));
 wireImport($('#btn-import-empty'));
 
 document.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Not while a "¿quitar?" is on screen: r would re-render the panel out from under the
+  // question. And any editable target owns its own letters, not just <input>.
+  if (openConfirm) return;
+  if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
   if (e.key === 'r') refresh(true);
   if (e.key === 'i') importCurrent();
 });
