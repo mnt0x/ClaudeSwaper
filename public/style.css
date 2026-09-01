@@ -328,6 +328,53 @@ main { max-width: 1180px; margin: 0 auto; }
 }
 .row.is-active .badge-active { display: inline-block; }
 
+/* ---------- inline confirmation: no native dialog, no modal ---------- */
+
+.confirm { display: flex; align-items: center; gap: 0.35rem; }
+.confirm-q { font-size: 11.5px; color: var(--text-2); white-space: nowrap; }
+.confirm .btn { padding: 0.28rem 0.55rem; font-size: 11.5px; }
+
+/* Showing the question replaces the row's normal controls, so the two never compete. */
+.row.is-confirming .btn-swap,
+.row.is-confirming .badge-active,
+.row.is-confirming .btn-remove { display: none; }
+
+.btn-danger { color: var(--crit); border-color: rgba(255, 92, 114, 0.4); background: rgba(255, 92, 114, 0.09); }
+.btn-danger:hover:not(:disabled) { background: rgba(255, 92, 114, 0.18); border-color: var(--crit); color: var(--crit); }
+
+/* ---------- inline field ---------- */
+
+.field-row {
+  max-width: 1180px; margin: 0 auto 0.9rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+}
+.field-row > label {
+  display: block;
+  font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 0.55rem;
+}
+.field-line { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+.field-prefix { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+
+.field-line input {
+  flex: 1; min-width: 12rem;
+  font: inherit; font-size: 12.5px;
+  color: var(--text);
+  caret-color: var(--phos);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 0.42rem 0.6rem;
+}
+.field-line input::placeholder { color: var(--text-3); }
+.field-line input:focus-visible { border-color: var(--phos); outline-offset: 1px; }
+
+.field-help { margin: 0.6rem 0 0; font-size: 11.5px; color: var(--text-3); }
+
 .row-note {
   grid-column: 1 / -1;
   margin: 0.5rem 0 0;

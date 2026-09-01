@@ -65,6 +65,22 @@
   <p>Sin respuesta del servidor local. ¿Se ha cerrado <code>node server.js</code>?</p>
 </div>
 
+<!-- Isolated-login import. An inline field, not a prompt: it stays on the page, it can
+     be styled, and Escape or cancel returns you exactly where you were. -->
+<form class="field-row" id="dir-form" hidden>
+  <label for="dir-input">Importar desde otra carpeta de configuración</label>
+  <div class="field-line">
+    <span class="field-prefix" aria-hidden="true">CLAUDE_CONFIG_DIR</span>
+    <input type="text" id="dir-input" name="dir" spellcheck="false" autocomplete="off"
+           placeholder="/tmp/cuenta2" aria-describedby="dir-help">
+    <button class="btn btn-primary" type="submit">importar</button>
+    <button class="btn" type="button" id="dir-cancel">cancelar</button>
+  </div>
+  <p class="field-help" id="dir-help">
+    La carpeta que usaste al ejecutar <code>CLAUDE_CONFIG_DIR=… claude</code>. Tu sesión activa no se toca.
+  </p>
+</form>
+
 <main>
   <div class="panel" id="panel">
     <div class="columns" id="columns" hidden>
@@ -129,6 +145,14 @@
       <button class="btn-icon btn-remove" title="Quitar del dashboard" aria-label="Quitar del dashboard">
         <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-close"/></svg>
       </button>
+
+      <!-- Inline confirmation: a destructive step deserves a second beat, not a modal
+           that steals focus from the whole page for one row. -->
+      <div class="confirm" hidden>
+        <span class="confirm-q">¿quitar?</span>
+        <button class="btn btn-danger btn-yes">sí</button>
+        <button class="btn btn-no">no</button>
+      </div>
     </div>
 
     <p class="row-note" hidden></p>

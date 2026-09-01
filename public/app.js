@@ -159,7 +159,7 @@ function buildRow(account) {
     swapBtn.title = `Poner ${account.label} como cuenta activa`;
     swapBtn.addEventListener('click', () => doSwap(account.id, swapBtn));
   }
-  $('.btn-remove', node).addEventListener('click', () => removeAccount(account));
+  $('.btn-remove', node).addEventListener('click', () => armRemoval(node, account));
 
   return node;
 }
@@ -188,17 +188,42 @@ function render() {
 
 /* ---------------- actions ---------------- */
 
-async function removeAccount(account) {
-  const ok = confirm(`¿Quitar "${account.label}" del dashboard?\n\n`
-    + 'Solo se borra de aquí. La cuenta de Anthropic no se toca.');
-  if (!ok) return;
-  try {
-    await api(`/api/accounts/${account.id}`, { method: 'DELETE' });
-    toast(`${account.label} eliminada`, 'ok');
-    await refresh(false);
-  } catch (err) {
-    toast(err.message, 'err');
+/**
+ * Destructive, so it asks — inline, in the row itself. A native confirm() cannot be
+ * styled, blocks the whole page, and reads as a browser artefact rather than part of
+ * the tool. Escape or a click elsewhere backs out.
+ */
+function armRemoval(node, account) {
+  const confirmEl = $('.confirm', node);
+  if (!confirmEl.hidden) return;
+
+  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  const onOutside = (e) => { if (!confirmEl.contains(e.target)) close(); };
+  function close() {
+    confirmEl.hidden = true;
+    node.classList.remove('is-confirming');
+    document.removeEventListener('keydown', onKey, true);
+    document.removeEventListener('pointerdown', onOutside, true);
   }
+
+  confirmEl.hidden = false;
+  node.classList.add('is-confirming');
+  $('.btn-no', confirmEl).focus();
+  document.addEventListener('keydown', onKey, true);
+  // Deferred, or the very click that opened this would immediately close it.
+  setTimeout(() => document.addEventListener('pointerdown', onOutside, true), 0);
+
+  $('.btn-no', confirmEl).addEventListener('click', close, { once: true });
+  $('.btn-yes', confirmEl).addEventListener('click', async () => {
+    close();
+    try {
+      await api(`/api/accounts/${account.id}`, { method: 'DELETE' });
+      toast(`${account.label} eliminada del dashboard`, 'ok');
+      await refresh(false);
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  }, { once: true });
 }
 
 async function doSwap(id, button) {
@@ -290,11 +315,26 @@ $('#btn-refresh').addEventListener('click', () => refresh(true));
 // Plain click imports the live session. Shift-click imports from an isolated login
 // (CLAUDE_CONFIG_DIR=... claude /login), so another account can be captured without
 // disturbing the one currently in use.
-const wireImport = (el) => el && el.addEventListener('click', (e) => {
-  if (!e.shiftKey) return importCurrent();
-  const dir = prompt('Carpeta de configuración aislada (la que usaste en CLAUDE_CONFIG_DIR):');
-  if (dir) importCurrent(dir.trim());
+const dirForm = $('#dir-form');
+const dirInput = $('#dir-input');
+
+function openDirField() { dirForm.hidden = false; dirInput.focus(); dirInput.select(); }
+function closeDirField() { dirForm.hidden = true; dirInput.value = ''; $('#btn-import').focus(); }
+
+dirForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const dir = dirInput.value.trim();
+  if (!dir) { dirInput.focus(); return; }
+  dirForm.hidden = true;
+  await importCurrent(dir);
+  dirInput.value = '';
 });
+$('#dir-cancel').addEventListener('click', closeDirField);
+dirInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDirField(); });
+
+const wireImport = (el) => el && el.addEventListener('click', (e) => (
+  e.shiftKey ? openDirField() : importCurrent()
+));
 wireImport($('#btn-import'));
 wireImport($('#btn-import-empty'));
 
