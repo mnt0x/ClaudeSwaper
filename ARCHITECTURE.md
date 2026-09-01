@@ -90,17 +90,47 @@ the API and the CSS always agree: `<50` normal, `50-79` medium, `80-94` high, `>
 
 ### Rate limiting
 
-The usage endpoint has a low sustained quota and answers 429 with `Retry-After: 0`, which is
-useless — the block was measured outlasting several minutes. Hence: 5-minute cache, 5-minute
-polling, 10-minute backoff after a 429, and the last known-good reading served as `stale`
-instead of blanking the UI. A 401/403 is surfaced as a real error, since the token is dead.
+The usage endpoint has a low sustained quota: measured against the live API, the **fifth**
+request in quick succession answers 429 with `Retry-After: 300`, escalating toward ~3600s if
+you keep hitting it. That is a budget of about five requests per five minutes for the whole
+app, however many accounts are configured.
+
+Tuning the poll frequency cannot hold that, because a sweep of N accounts costs N requests. So
+the primary mechanism is a **hard floor of 80 s between any two outbound calls** (`MIN_GAP_MS`,
+`lib/usage.js`), which nothing bypasses — not the refresh button, not a second browser tab.
+The number that matters is not the average rate but how many calls fit in the endpoint's 300 s
+window: with a gap of `g` that is `floor(300/g) + 1`, so `g` must satisfy `4g >= 300`. At 70 s
+it was exactly five, i.e. the app rate-limited itself.
+
+Everything else sits around that floor: a 15-minute cache, 10-minute polling, and a backoff
+that starts at 10 minutes and **doubles with each consecutive 429**, capped at an hour. The
+cooldown and the offence counter are persisted alongside the cache, because a restart that
+forgot them walked straight back into the block and reset the escalation.
+
+Bookkeeping lives in `fetchRaw`, not `fetchFor`: the swap verifies a new token by calling
+`fetchRaw` directly, and an uncounted call is exactly the amplification that trips the limit.
+`fetchRaw` still never blocks — verifying a token has to work mid-cooldown — it just is not free.
+
+When the API cannot be reached, the last known-good reading is served as `stale` rather than
+blanking the UI. A 401/403 is surfaced as a real error, since the token is dead.
+
+Turn order is "least recently **attempted** first", not least recently succeeded: ranking by
+success alone let a single account with a dead token sit at zero and win every sweep for ever,
+so the healthy accounts never got a reading at all.
 
 ### Token lifetimes
 
 Access ~8 h, refresh ~29 days, rotating on every use. A background keep-alive renews anything
 with under a day of life left, every 6 hours. Because refreshing **invalidates the previous
-refresh token**, renewing the active account also writes the new pair into the live
-credentials — otherwise Claude Code would be left holding a dead token.
+refresh token**, renewing the account whose session is live also writes the new pair into the
+live credentials — otherwise Claude Code would be left holding a dead token.
+
+"Whose session is live" is decided by comparing the pre-refresh refresh token against the one
+in the credentials, not by `activeId`. `activeId` cannot answer it: a swap writes the new
+credentials and only calls `setActive()` at the very end, after a network round trip, so for
+seconds at a time the two disagree by design — and a manual `claude /login` changes the live
+session without telling the store at all. The write goes through the credentials **backend**,
+so on macOS it lands in the Keychain rather than in a file Claude Code never reads.
 
 ---
 
@@ -124,7 +154,7 @@ only shape allowed to reach the browser; it strips `oauth` and `userID`.
 |---|---|---|
 | GET | `/api/health` | `{ok, claudeRunning, pids, node, platform, credentialsBackend, paths}` |
 | GET | `/api/accounts` | `{activeId, accounts:[...]}` — token fields stripped |
-| GET | `/api/usage/all` | `{ "<id>": NormalizedUsage }`, concurrent, failures isolated |
+| GET | `/api/usage/all` | `{ "<id>": NormalizedUsage }`, sequential, failures isolated |
 | GET | `/api/usage?id=` | `NormalizedUsage` |
 | POST | `/api/swap` | `{id}` -> `{ok, verified, warnings[], backup, account}` |
 | POST | `/api/swap/dryrun` | `{id}` -> what would change, writes nothing |
@@ -140,8 +170,17 @@ NormalizedUsage:
     // failure: { id, ok:false, error, status, needsRelogin }
 
 Guards: loopback bind, `Host` validated, cross-site `Origin` rejected, `X-Swaper: 1` required
-on every mutating request, static serving confined to `public/`. Anything matching
-`sk-ant-[A-Za-z0-9_-]+` is scrubbed before it can reach a log or a response body.
+on **every `/api/` request, GET included**, static serving confined to `public/`. Anything
+matching `sk-ant-[A-Za-z0-9_-]+` is scrubbed before it can reach a log or a response body.
+
+GET is not exempt because read-only is not the same as harmless: `/api/health` spawns a process
+per call and `/api/usage` spends the app's whole request budget for the window, and neither an
+`<img>` nor a cross-site form can set a custom header. Static assets stay exempt — the browser
+loads `/style.css` with no say in its headers.
+
+The port is fixed. `EADDRINUSE` reports the running instance and exits rather than hopping to
+the next free port: the rate floor is per process, so a second instance would double the
+outbound rate and rate-limit both.
 
 ---
 

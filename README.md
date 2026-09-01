@@ -24,6 +24,10 @@ node server.js
 
 Se abre solo en <http://127.0.0.1:7373>. Escucha únicamente en loopback.
 
+Si ya hay una instancia corriendo, la segunda te lo dice, abre la que ya está y sale. No salta
+de puerto a propósito: el tope de ritmo de consultas es por proceso, así que dos instancias a la
+vez doblarían las peticiones y acabarían limitadas las dos. Para otro puerto, `PORT=7400 node server.js`.
+
 Para dejarlo corriendo de fondo, `npm start` o el gestor de procesos que uses.
 
 ---
@@ -116,6 +120,12 @@ claude
 Haz `/login`, sal, y en el dashboard **Shift+clic** sobre `[i] import` indicando esa carpeta.
 Tu sesión principal no se altera.
 
+> **No arranques el servidor en esa misma ventana.** `set CLAUDE_CONFIG_DIR=...` vale para toda
+> la sesión de terminal, así que un `node server.js` lanzado ahí hereda la variable y opera sobre
+> la carpeta desechable en vez de sobre tu configuración real: el swap diría que ha ido bien y no
+> habría cambiado nada. Si pasa, el servidor lo avisa al arrancar con la ruta sobre la que está
+> trabajando. Usa una terminal nueva, o `set CLAUDE_CONFIG_DIR=` para vaciarla.
+
 > No hay login OAuth dentro del dashboard, y es deliberado: el cliente OAuth de Claude Code
 > solo acepta sus propias URIs de redirección registradas, así que un `http://127.0.0.1:PUERTO/callback`
 > se rechaza con *"Redirect URI is not supported by client"*. Importar es más simple y siempre funciona.
@@ -166,8 +176,10 @@ toda la app**, tengas las cuentas que tengas.
 
 Ajustar la frecuencia no basta: un barrido de N cuentas cuesta N peticiones, así que con
 suficientes cuentas un solo refresco agota la cuota. Por eso hay **un tope duro de ritmo**:
-70 segundos entre dos consultas cualesquiera, pase lo que pase. Ni machacando `[r] refresh` se
-puede superar. Todo lo demás gira alrededor de ese tope: caché de 15 minutos, sondeo cada 10,
+80 segundos entre dos consultas cualesquiera, pase lo que pase. Ni machacando `[r] refresh` se
+puede superar. Lo que cuenta no es el ritmo medio sino cuántas consultas caben en la ventana de
+5 minutos de la API: con un hueco de 80 s son cuatro, una por debajo de la que devuelve 429.
+Todo lo demás gira alrededor de ese tope: caché de 15 minutos, sondeo cada 10,
 y backoff que se duplica con cada 429 seguido.
 
 Cuando varias cuentas compiten por el turno, lo gana **la más desactualizada**, así que todas
@@ -228,7 +240,9 @@ security add-generic-password -U -s "Claude Code-credentials" -a "$USER" \
   En Windows, `chmod` casi no hace nada, así que `data/` se protege con una ACL NTFS real
   (`icacls`) limitada a tu usuario. En Linux y macOS se usa modo 0600.
 - El servidor escucha solo en `127.0.0.1`, valida la cabecera `Host`, rechaza `Origin` de otro
-  sitio y exige la cabecera `X-Swaper: 1` en toda petición que modifique algo.
+  sitio y exige la cabecera `X-Swaper: 1` en **toda** petición a `/api/`, también las de lectura:
+  una web cualquiera no puede ponerla, y `/api/health` lanza un proceso por llamada mientras
+  `/api/usage` gasta el presupuesto de consultas de toda la app. Los estáticos siguen exentos.
 - Los tokens nunca salen hacia el navegador ni aparecen en logs ni en mensajes de error.
 - `userID` de `~/.claude.json` **no se toca**: es un identificador de instalación, no de cuenta
   (comprobado: no deriva del `accountUuid`).
@@ -246,6 +260,11 @@ node test.js
 Verifica el normalizado del uso, la conversión de caducidad de tokens, el comportamiento ante
 un 429, el ida y vuelta de credenciales, que la vista pública no filtra credenciales y —lo
 importante— que el swap conserva todas las claves de `~/.claude.json`.
+
+También cubre lo que cuesta caro cuando se rompe: que el keep-alive solo sincroniza la sesión
+viva si sigue siendo de esa cuenta, que el rollback no puede dejar un `~/.claude.json` a medias,
+que el cooldown de un 429 sobrevive a reiniciar, que una cuenta con el token muerto no acapara
+el turno de consulta, y que la API entera exige la cabecera `X-Swaper` mientras los estáticos no.
 
 ---
 

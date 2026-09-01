@@ -32,6 +32,13 @@ const usage = require('./lib/usage');
 const swapLib = require('./lib/swap');
 const oauth = require('./lib/oauth');
 
+// The usage cache is written to disk, so without this the suite would trample the real
+// data/usage-cache.json — including, now that it is persisted, the rate-limit cooldown.
+const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-data-'));
+P.dataDir = () => SANDBOX;
+P.backupsDir = () => path.join(SANDBOX, 'backups');
+P.accountsPath = () => path.join(SANDBOX, 'accounts.json');
+
 check('atomic write survives a corrupt-target refusal', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-t-'));
   const f = path.join(tmp, 'x.json');
@@ -190,6 +197,98 @@ check('the macOS branch degrades to the file backend instead of crashing', () =>
   }
 });
 
+check('el keep-alive solo sincroniza la sesión viva si sigue siendo de esa cuenta', () => {
+  // Regresión: el keep-alive escribía por RUTA (saltándose el Keychain en macOS) y decidía
+  // por activeId, que durante un swap va por detrás de la realidad varios segundos.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-sync-'));
+  const previous = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = tmp;
+  try {
+    delete require.cache[require.resolve('./lib/credentials')];
+    const credentials = require('./lib/credentials');
+    credentials.write({
+      mcpOAuth: { 'srv|1': { accessToken: 'keep' } },
+      claudeAiOauth: { accessToken: 'A-acc', refreshToken: 'A-ref', expiresAt: 1, scopes: [] },
+    });
+
+    // Otra cuenta se ha adueñado de la sesión viva (un swap, o un /login a mano).
+    const foreign = swapLib.syncLiveCredentials('B-ref', { accessToken: 'B2', refreshToken: 'B2r', expiresAt: 2 });
+    assert.strictEqual(foreign, false, 'no debe escribir sobre una sesión que ya no es suya');
+    assert.strictEqual(credentials.read().claudeAiOauth.accessToken, 'A-acc');
+
+    // La sesión viva sigue siendo de A: el par rotado sí tiene que entrar, o el refresh
+    // token que acaba de morir se queda como el único que conoce Claude Code.
+    const own = swapLib.syncLiveCredentials('A-ref', {
+      accessToken: 'A2-acc', refreshToken: 'A2-ref', expiresAt: 2, scopes: [],
+    });
+    assert.strictEqual(own, true);
+    const after = credentials.read();
+    assert.strictEqual(after.claudeAiOauth.accessToken, 'A2-acc');
+    assert.strictEqual(after.claudeAiOauth.refreshToken, 'A2-ref');
+    assert.strictEqual(after.mcpOAuth['srv|1'].accessToken, 'keep', 'mcpOAuth debe sobrevivir');
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previous;
+    delete require.cache[require.resolve('./lib/credentials')];
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+check('el rollback restaura ~/.claude.json con escritura atómica, no copyFileSync', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-rb-'));
+  const previous = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = tmp;
+  try {
+    const backupDir = path.join(tmp, 'backup');
+    fs.mkdirSync(backupDir);
+    const original = { userID: 'KEEP', projects: { '/x': { history: [1] } }, oauthAccount: { emailAddress: 'old@x' } };
+    fs.writeFileSync(path.join(backupDir, 'claude.json'), JSON.stringify(original, null, 2));
+    fs.writeFileSync(P.claudeJsonPath(), '{"oauthAccount":{"emailAddress":"new@x"}}');
+
+    const restored = swapLib.restoreFrom(backupDir);
+    assert.ok(restored.includes(P.claudeJsonPath()));
+    assert.deepStrictEqual(P.readJsonFile(P.claudeJsonPath()), original);
+    assert.strictEqual(fs.readdirSync(tmp).filter((n) => n.endsWith('.tmp')).length, 0, 'sin restos .tmp');
+
+    // Y un backup corrupto no puede llevarse por delante la configuración viva: la ruta
+    // atómica lo rechaza antes de abrir el destino. copyFileSync lo habría copiado encima,
+    // que es la misma ventana por la que un fallo a mitad de copia dejaba un fragmento.
+    const live = fs.readFileSync(P.claudeJsonPath(), 'utf8');
+    fs.writeFileSync(path.join(backupDir, 'claude.json'), '{ roto');
+    assert.throws(() => swapLib.restoreFrom(backupDir), /JSON/);
+    assert.strictEqual(fs.readFileSync(P.claudeJsonPath(), 'utf8'), live, 'la config viva debe quedar intacta');
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previous;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+check('el suelo de ritmo deja como mucho 4 peticiones en la ventana de 300 s', () => {
+  // Lo que importa no es la tasa media sino cuántas caben en la ventana del endpoint:
+  // con un hueco g son floor(300/g)+1, y la quinta es la que devuelve 429.
+  const perWindow = Math.floor((300 * 1000) / usage.MIN_GAP_MS) + 1;
+  assert.ok(perWindow <= 4, `MIN_GAP_MS=${usage.MIN_GAP_MS}ms permite ${perWindow} peticiones por ventana`);
+});
+
+check('hardenDataDir deja constancia aunque icacls falle', () => {
+  // ponytail: fuera de Windows la función no hace nada, así que no hay nada que probar.
+  if (process.platform !== 'win32') return;
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-acl-'));
+  const realRoot = process.env.SystemRoot;
+  process.env.SystemRoot = path.join(tmp, 'no-such-windows');
+  try {
+    P.hardenDataDir(tmp);
+    const marker = path.join(tmp, '.acl-applied');
+    assert.ok(fs.existsSync(marker), 'sin marcador, ensureDirs() relanza icacls en cada lectura');
+    assert.match(fs.readFileSync(marker, 'utf8'), /NOT applied/, 'el fallo debe quedar escrito');
+  } finally {
+    if (realRoot === undefined) delete process.env.SystemRoot;
+    else process.env.SystemRoot = realRoot;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 check('detectClaudeProcesses never throws', () => {
   const r = swapLib.detectClaudeProcesses();
   assert.strictEqual(typeof r.running, 'boolean');
@@ -227,6 +326,96 @@ async function checkAsync(name, fn) {
 }
 
 (async () => {
+  await checkAsync('la cabecera X-Swaper es obligatoria en toda la API, GET incluido', async () => {
+    // Un <img src="http://127.0.0.1:7373/api/health"> desde cualquier web pasaba las tres
+    // guardas: sin Origin, método GET, y Host correcto. Cada llamada lanza un tasklist.
+    const server = require('./server');
+    const PORT = 7999;
+    const s = server.createServer(PORT);
+    await new Promise((resolve, reject) => {
+      s.once('error', reject);
+      s.listen(PORT, '127.0.0.1', resolve);
+    });
+    try {
+      const base = `http://127.0.0.1:${PORT}`;
+      assert.strictEqual((await fetch(`${base}/api/health`)).status, 403, 'GET a la API sin cabecera');
+      assert.strictEqual((await fetch(`${base}/api/accounts`)).status, 403, 'GET a la API sin cabecera');
+      assert.strictEqual((await fetch(`${base}/api/health`, { headers: { 'X-Swaper': '1' } })).status, 200);
+      assert.strictEqual((await fetch(`${base}/style.css`)).status, 200, 'los estáticos no pueden exigirla');
+    } finally {
+      await new Promise((resolve) => s.close(resolve));
+    }
+  });
+
+  await checkAsync('el cooldown de un 429 sobrevive a reiniciar el servidor', async () => {
+    const realFetch = global.fetch;
+    const account = { id: 'rst1', oauth: { accessToken: 'tok' } };
+    try {
+      usage.invalidate();
+      usage.resetCooldown();
+      global.fetch = async () => ({
+        ok: false, status: 429,
+        headers: { get: (h) => (h === 'retry-after' ? '300' : null) },
+        text: async () => '{"error":{"type":"rate_limit_error"}}',
+      });
+      await usage.fetchFor(account, { force: true });
+      assert.ok(usage.cooldownRemainingMs() > 0, 'el 429 arma el cooldown');
+
+      // Reiniciar el proceso = cargar el módulo desde cero. Antes, eso lo olvidaba todo y
+      // el arranque siguiente volvía derecho al endpoint que seguía castigando.
+      delete require.cache[require.resolve('./lib/usage')];
+      const restarted = require('./lib/usage');
+      assert.ok(restarted.cooldownRemainingMs() > 0, 'el cooldown debe sobrevivir al reinicio');
+
+      let called = false;
+      global.fetch = async () => { called = true; throw new Error('must not be called'); };
+      await restarted.fetchFor(account, { force: true });
+      assert.strictEqual(called, false, 'tras reiniciar no debe volver a golpear el endpoint');
+      restarted.resetCooldown();
+    } finally {
+      global.fetch = realFetch;
+      delete require.cache[require.resolve('./lib/usage')];
+      usage.resetCooldown();
+      usage.invalidate();
+    }
+  });
+
+  await checkAsync('una cuenta con el token muerto no monopoliza el turno', async () => {
+    // cache.at solo avanza al triunfar, así que una cuenta con 401 se quedaba en 0 y ganaba
+    // el orden "más desactualizada primero" en TODOS los barridos, para siempre.
+    const accounts = ['broken', 'good1', 'good2'].map((n) => ({ id: `st-${n}`, oauth: { accessToken: n } }));
+    const realFetch = global.fetch;
+    const asked = [];
+    try {
+      usage.invalidate();
+      usage.resetCooldown();
+      global.fetch = async (url, opts) => {
+        const who = String(opts.headers.Authorization).replace('Bearer ', '');
+        asked.push(who);
+        if (who === 'broken') {
+          return { ok: false, status: 401, headers: { get: () => null }, text: async () => 'unauthorized' };
+        }
+        return {
+          ok: true, status: 200, headers: { get: () => null },
+          text: async () => JSON.stringify({ limits: [{ kind: 'session', percent: 5 }] }),
+        };
+      };
+      // Tres barridos. resetCooldown entre ellos solo levanta el suelo de 80 s, que si no
+      // haría del test una espera de cuatro minutos; el orden de turnos no se toca.
+      for (let i = 0; i < 3; i++) {
+        await usage.fetchAll(accounts, { force: true });
+        usage.resetCooldown();
+      }
+      assert.strictEqual(asked.length, 3, `un barrido, una petición (${asked.join(', ')})`);
+      assert.strictEqual(asked[0], 'broken', 'la primera vez sí gana la más desactualizada');
+      assert.ok(!asked.slice(1).includes('broken'), `la cuenta muerta repitió turno: ${asked.join(', ')}`);
+    } finally {
+      global.fetch = realFetch;
+      usage.invalidate();
+      usage.resetCooldown();
+    }
+  });
+
   await checkAsync('a 429 serves the last good reading instead of blanking the row', async () => {
     const account = { id: 'rl1', oauth: { accessToken: 'tok' } };
     const realFetch = global.fetch;

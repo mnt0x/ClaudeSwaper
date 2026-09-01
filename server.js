@@ -60,10 +60,13 @@ function readBody(req) {
 
 /**
  * Two guards against a random website in the user's browser driving this API:
- * a same-origin check, and a custom header that a simple cross-site form cannot set.
- * Applied to every mutating route.
+ * a same-origin check, and a custom header that no cross-site form, <img> or <script>
+ * can set. The header covers the whole API, GET included: read-only is not the same as
+ * harmless here. /api/health spawns a process per call (a page could pin the event loop
+ * with a loop of <img> tags), and /api/usage spends the app's entire request budget for
+ * the whole 5-minute window.
  */
-function guard(req, res, port) {
+function guard(req, res, port, pathname) {
   const host = req.headers.host || '';
   const allowedHosts = [`${HOST}:${port}`, `localhost:${port}`];
   if (!allowedHosts.includes(host)) { fail(res, 403, 'Host no permitido'); return false; }
@@ -72,7 +75,8 @@ function guard(req, res, port) {
   if (origin && !allowedHosts.some((h) => origin === `http://${h}`)) {
     fail(res, 403, 'Origen no permitido'); return false;
   }
-  if (req.method !== 'GET' && req.headers['x-swaper'] !== '1') {
+  // Static assets are exempt: the browser loads /style.css with no say in its headers.
+  if (pathname.startsWith('/api/') && req.headers['x-swaper'] !== '1') {
     fail(res, 403, 'Falta la cabecera X-Swaper'); return false;
   }
   return true;
@@ -194,7 +198,6 @@ const KEEPALIVE_EVERY_MS = 6 * 60 * 60 * 1000;   // every 6h
 const REFRESH_WHEN_UNDER_MS = 24 * 60 * 60 * 1000; // renew if under a day of life left
 
 async function keepTokensAlive() {
-  const activeId = store.load().activeId;
   for (const account of store.list()) {
     const o = account.oauth;
     if (!o || !o.refreshToken) continue;
@@ -203,19 +206,32 @@ async function keepTokensAlive() {
     try {
       const fresh = oauth.toStoredOauth(await oauth.refresh(o.refreshToken), o);
       store.update(account.id, { oauth: fresh });
-      // Refreshing ROTATES the refresh token and kills the old one. If this is the
-      // account Claude Code is currently using, its credentials file now holds a dead
-      // token — push the new pair across or we would log the user out of their CLI.
-      if (account.id === activeId) {
-        swap.writeCredentials(P.credentialsPath(), fresh);
-      }
-      console.log(`  token renovado: ${account.email}${account.id === activeId ? ' (y sincronizado con Claude Code)' : ''}`);
+      // Refreshing ROTATES the refresh token and kills the old one, so the live session
+      // may now be holding a dead token. syncLiveCredentials decides whether it is this
+      // account's session to update, and writes through the credentials BACKEND — on
+      // macOS that is the Keychain, and a path-based write would land in a file Claude
+      // Code never reads, leaving it with the dead token for real.
+      const synced = swap.syncLiveCredentials(o.refreshToken, fresh);
+      console.log(`  token renovado: ${account.email}${synced ? ' (y sincronizado con Claude Code)' : ''}`);
     } catch (err) {
       // Do not delete anything — a transient network failure must not cost an account.
-      console.warn(`  no se pudo renovar ${account.email}: ${oauth.scrub(err.message)}`);
+      // invalid_grant is the one case that is not transient and that the user can act on:
+      // something rotated this account's tokens outside the store (Claude Code renews its
+      // own session too), so the stored refresh token is dead and only a re-import fixes it.
+      const dead = /invalid_grant/.test(err.message);
+      console.warn(`  no se pudo renovar ${account.email}: ${dead
+        ? 'el refresh token guardado ya no vale. Entra con esa cuenta (claude, /login) y pulsa import.'
+        : oauth.scrub(err.message)}`);
     }
   }
 }
+
+// store.list() reads accounts.json, which can throw on a corrupt or briefly locked file —
+// outside the try above, and in a promise nobody awaits. Unhandled, that kills the process
+// and with it the only thing keeping the stored accounts from expiring.
+const keepAliveTick = () => keepTokensAlive().catch((err) => {
+  console.warn(`  keep-alive: ${oauth.scrub((err && err.message) || err)}`);
+});
 
 function createServer(port) {
   return http.createServer(async (req, res) => {
@@ -226,7 +242,7 @@ function createServer(port) {
       return fail(res, 400, 'URL inválida');
     }
     try {
-      if (!guard(req, res, port)) return;
+      if (!guard(req, res, port, url.pathname)) return;
       if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url, port);
       if (req.method !== 'GET') return fail(res, 405, 'Método no permitido');
       return serveStatic(res, url.pathname);
@@ -236,10 +252,19 @@ function createServer(port) {
   });
 }
 
-function listen(port, attemptsLeft) {
+function listen(port) {
   const server = createServer(port);
   server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE' && attemptsLeft > 0) return listen(port + 1, attemptsLeft - 1);
+    // Deliberately NOT hopping to the next free port. The rate floor that keeps this app
+    // inside the usage endpoint's budget is per process, so a second instance quietly
+    // running on 7374 would double the outbound rate and rate-limit both of them.
+    if (err.code === 'EADDRINUSE') {
+      const url = `http://${HOST}:${port}`;
+      console.log(`\n  Ya hay algo escuchando en ${url} — probablemente otro ClaudeSwaper.`);
+      console.log(`  Ábrelo ahí, o arranca en otro puerto:  PORT=7400 node server.js\n`);
+      if (!process.env.NO_OPEN) oauth.openBrowser(url);
+      process.exit(0);
+    }
     console.error(`No se pudo abrir el puerto ${port}: ${err.message}`);
     process.exit(1);
   });
@@ -247,10 +272,15 @@ function listen(port, attemptsLeft) {
     const url = `http://${HOST}:${port}`;
     console.log(`\n  ClaudeSwaper  ->  ${url}`);
     console.log(`  datos: ${P.dataDir()}`);
+    // Inherited from the shell, this silently redirects every read and write to a throwaway
+    // config — and the README teaches people to set it for an isolated login.
+    if (process.env.CLAUDE_CONFIG_DIR) {
+      console.log(`  AVISO: CLAUDE_CONFIG_DIR está definido, se opera sobre ${P.claudeJsonPath()}`);
+    }
     console.log('  Ctrl+C para salir\n');
     if (!process.env.NO_OPEN) oauth.openBrowser(url);
-    keepTokensAlive();
-    setInterval(keepTokensAlive, KEEPALIVE_EVERY_MS).unref();
+    keepAliveTick();
+    setInterval(keepAliveTick, KEEPALIVE_EVERY_MS).unref();
   });
   const bye = () => { server.close(); process.exit(0); };
   process.on('SIGINT', bye);
@@ -260,7 +290,7 @@ function listen(port, attemptsLeft) {
 
 if (require.main === module) {
   P.ensureDirs();
-  listen(BASE_PORT, 10);
+  listen(BASE_PORT);
 }
 
 module.exports = { createServer, listen };
