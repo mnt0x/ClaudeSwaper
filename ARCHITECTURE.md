@@ -125,6 +125,18 @@ with under a day of life left, every 6 hours. Because refreshing **invalidates t
 refresh token**, renewing the account whose session is live also writes the new pair into the
 live credentials — otherwise Claude Code would be left holding a dead token.
 
+Rotation runs in both directions, and the inbound one is what actually bites: **Claude Code
+renews its own session**, so the live pair moves on and the store's copy is left holding a token
+Anthropic has already killed. Nothing surfaces that until the keep-alive tries it, by which
+point the account needs a real login — the one thing this app exists to avoid.
+
+So before renewing anything, `swap.adoptLiveTokens` checks whether the live refresh token still
+matches the active account's, and adopts the live pair when it does not. Tokens carry no
+identity, so it only adopts when `oauthAccount` in `~/.claude.json` and our own `activeId` name
+the same account: agreement means the identity never changed and only the pair moved. On any
+disagreement it does nothing — writing one account's tokens into another's record is far worse
+than asking for an import.
+
 "Whose session is live" is decided by comparing the pre-refresh refresh token against the one
 in the credentials, not by `activeId`. `activeId` cannot answer it: a swap writes the new
 credentials and only calls `setActive()` at the very end, after a network round trip, so for

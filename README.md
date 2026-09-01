@@ -166,6 +166,18 @@ Renovar **rota** el refresh token e invalida el anterior. Si la cuenta renovada 
 Code está usando, el nuevo par se escribe también en sus credenciales vivas; si no, la próxima
 vez que el CLI intentara refrescar con el token viejo te echaría.
 
+Y al revés: **Claude Code también renueva su sesión por su cuenta**, sin avisar a nadie. Cuando
+lo hace, el par vivo avanza y la copia guardada aquí se queda con un token muerto. No tiene nada
+que ver con reiniciar el PC; es lo que pasa usando Claude Code con normalidad, y antes solo se
+notaba semanas después, cuando el mantenimiento fallaba y la cuenta ya solo se recuperaba con un
+login. Ahora, al arrancar, el dashboard detecta esa deriva y **adopta el par vivo**.
+
+Solo lo hace cuando sabe de quién es: los tokens no llevan identidad, así que se cruza el
+`oauthAccount` de `~/.claude.json` con la cuenta que el dashboard tiene como activa. Si las dos
+fuentes coinciden, la identidad no cambió y solo se movieron los tokens: se adopta. Si discrepan
+—un `/login` con otra cuenta, por ejemplo— no se toca nada y te lo dice, porque escribir ahí los
+tokens de otra cuenta sería mucho peor que pedirte un `import`.
+
 ---
 
 ## Límites de la API de uso

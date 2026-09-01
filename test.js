@@ -234,6 +234,53 @@ check('el keep-alive solo sincroniza la sesión viva si sigue siendo de esa cuen
   }
 });
 
+check('el store adopta el par que Claude Code rotó por su cuenta, y solo si sabe de quién es', () => {
+  // Claude Code renueva su propia sesión y el refresh rota: el par vivo avanza y la copia
+  // del store muere. Sin esto, semanas después el keep-alive fallaba con invalid_grant y
+  // la cuenta solo se recuperaba con un login, que es justo lo que la app evita.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-adopt-'));
+  const previous = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = tmp;
+  const store = require('./lib/store');
+  try {
+    const profile = { accountUuid: 'uuid-live', emailAddress: 'live@x.com', displayName: 'Live' };
+    const account = store.add({
+      email: 'live@x.com', profile,
+      oauth: { accessToken: 'VIEJO', refreshToken: 'R-VIEJO', expiresAt: 1, subscriptionType: 'max' },
+    });
+    store.setActive(account.id);
+    const writeLive = (refreshToken) => P.writeJsonAtomic(P.credentialsPath(), {
+      claudeAiOauth: { accessToken: 'NUEVO', refreshToken, expiresAt: 2, scopes: [] },
+    }, 0o600);
+    const claudeJson = (accountUuid) => P.writeJsonAtomic(P.claudeJsonPath(), { oauthAccount: { accountUuid } });
+
+    // Sin deriva: el par vivo es el que ya tiene guardado, no hay nada que adoptar.
+    writeLive('R-VIEJO');
+    claudeJson('uuid-live');
+    assert.strictEqual(swapLib.adoptLiveTokens(store), null, 'sin deriva no debe tocar nada');
+
+    // Deriva, pero ~/.claude.json dice que la sesión es de OTRA cuenta: no se sabe de quién
+    // es el par, así que no se escribe. Adoptarlo metería tokens ajenos en esta cuenta.
+    writeLive('R-NUEVO');
+    claudeJson('uuid-de-otro');
+    assert.strictEqual(swapLib.adoptLiveTokens(store), null, 'identidad no corroborada: no adoptar');
+    assert.strictEqual(store.get(account.id).oauth.refreshToken, 'R-VIEJO');
+
+    // Deriva y las dos fuentes coinciden: solo se movieron los tokens. Se adopta.
+    claudeJson('uuid-live');
+    assert.strictEqual(swapLib.adoptLiveTokens(store), account.id);
+    const after = store.get(account.id).oauth;
+    assert.strictEqual(after.refreshToken, 'R-NUEVO');
+    assert.strictEqual(after.accessToken, 'NUEVO');
+    assert.strictEqual(after.subscriptionType, 'max', 'lo que el store sabía de más debe sobrevivir');
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = previous;
+    fs.rmSync(P.accountsPath(), { force: true });
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 check('el rollback restaura ~/.claude.json con escritura atómica, no copyFileSync', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-rb-'));
   const previous = process.env.CLAUDE_CONFIG_DIR;

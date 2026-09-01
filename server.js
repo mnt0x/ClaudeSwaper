@@ -198,6 +198,13 @@ const KEEPALIVE_EVERY_MS = 6 * 60 * 60 * 1000;   // every 6h
 const REFRESH_WHEN_UNDER_MS = 24 * 60 * 60 * 1000; // renew if under a day of life left
 
 async function keepTokensAlive() {
+  // First, pick up a rotation Claude Code performed on its own. Renewing with a token it
+  // already replaced would fail with invalid_grant and strand the account behind a login.
+  const healed = swap.adoptLiveTokens(store);
+  if (healed) {
+    const who = (store.get(healed) || {}).email || healed;
+    console.log(`  sesión viva adoptada: ${who} (Claude Code había rotado su token)`);
+  }
   for (const account of store.list()) {
     const o = account.oauth;
     if (!o || !o.refreshToken) continue;
