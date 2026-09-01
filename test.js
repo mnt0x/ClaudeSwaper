@@ -240,6 +240,9 @@ async function checkAsync(name, fn) {
       assert.strictEqual(good.session.percent, 42);
       assert.ok(!good.stale);
 
+      // Clear the rate floor: otherwise the next call is throttled locally and never
+      // reaches the API, so no 429 could come back.
+      usage.resetCooldown();
       global.fetch = async () => ({
         ok: false, status: 429,
         headers: { get: (h) => (h === 'retry-after' ? '5' : null) },
@@ -292,6 +295,40 @@ async function checkAsync(name, fn) {
     } finally {
       global.fetch = realFetch;
       usage.invalidate();
+    }
+  });
+
+  await checkAsync('the rate floor caps outbound calls no matter how hard the UI pushes', async () => {
+    // Measured against the live endpoint: the 5th rapid request returns 429 with
+    // Retry-After 300, escalating on repeat. So the floor, not the poll interval, is
+    // what has to hold — a user mashing refresh must not be able to spend the budget.
+    const accounts = [1, 2, 3, 4].map((n) => ({ id: `gap${n}`, oauth: { accessToken: 't' } }));
+    const realFetch = global.fetch;
+    let calls = 0;
+    try {
+      usage.invalidate();
+      usage.resetCooldown();
+      global.fetch = async () => {
+        calls++;
+        return {
+          ok: true, status: 200, headers: { get: () => null },
+          text: async () => JSON.stringify({ limits: [{ kind: 'session', percent: 3 }] }),
+        };
+      };
+      // Four accounts swept three times over, every call forced.
+      for (let i = 0; i < 3; i++) await usage.fetchAll(accounts, { force: true });
+      assert.strictEqual(calls, 1, `the floor should allow exactly 1 call, saw ${calls}`);
+
+      // The starved accounts must still render something rather than break.
+      const out = await usage.fetchAll(accounts, { force: true });
+      assert.strictEqual(Object.keys(out).length, 4);
+      const throttled = Object.values(out).filter((v) => v.throttled);
+      assert.ok(throttled.length >= 1, 'starved accounts report throttled, not a hard error');
+      assert.ok(throttled.every((v) => v.needsRelogin === false), 'throttling is not a token problem');
+    } finally {
+      global.fetch = realFetch;
+      usage.invalidate();
+      usage.resetCooldown();
     }
   });
 

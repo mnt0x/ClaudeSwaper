@@ -160,8 +160,19 @@ vez que el CLI intentara refrescar con el token viejo te echaría.
 
 ## Límites de la API de uso
 
-El endpoint de uso tiene cuota baja y responde a los 429 con `Retry-After: 0`, que no sirve de
-nada. Por eso: caché de 5 minutos, sondeo cada 5 minutos y espera de 10 minutos tras un 429.
+Medido contra la API real: **la quinta petición seguida devuelve 429**, con `Retry-After: 300`,
+y el castigo escala hasta ~3600s si insistes. O sea, unas **5 consultas por cada 5 minutos para
+toda la app**, tengas las cuentas que tengas.
+
+Ajustar la frecuencia no basta: un barrido de N cuentas cuesta N peticiones, así que con
+suficientes cuentas un solo refresco agota la cuota. Por eso hay **un tope duro de ritmo**:
+70 segundos entre dos consultas cualesquiera, pase lo que pase. Ni machacando `[r] refresh` se
+puede superar. Todo lo demás gira alrededor de ese tope: caché de 15 minutos, sondeo cada 10,
+y backoff que se duplica con cada 429 seguido.
+
+Cuando varias cuentas compiten por el turno, lo gana **la más desactualizada**, así que todas
+acaban refrescándose por rotación en vez de quedarse una fija consultando siempre. Las que
+esperan muestran `en cola, turno en Xs` y se reconsultan solas al vencer el plazo.
 
 Cuando la API no responde, el dashboard **muestra los últimos datos buenos** marcados en ámbar
 (`datos de hace Xs`) en lugar de vaciar la fila. La caché se guarda en `data/usage-cache.json`

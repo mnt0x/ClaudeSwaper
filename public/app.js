@@ -1,8 +1,9 @@
 // swaper frontend. No framework, no CDN. One horizontal row per account.
 
-// The usage endpoint rate-limits hard and its numbers move slowly, so polling is cheap
-// on purpose. The manual refresh button is there when you want it sooner.
-const POLL_MS = 5 * 60 * 1000;
+// The usage endpoint allows roughly 5 requests per 5 minutes for the WHOLE app, so the
+// server enforces a hard gap between outbound calls and serves cache around it. Polling
+// often would just pile up throttled requests, so it does not.
+const POLL_MS = 10 * 60 * 1000;
 const BAR_CELLS = 18;
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -143,9 +144,10 @@ function buildRow(account) {
   } else if (usage) {
     // A rate limit says nothing about the account: it still swaps, only the numbers are
     // unavailable. Painting it red like a broken token would be a lie.
-    node.classList.add(usage.rateLimited ? 'is-waiting' : 'is-err');
+    const waiting = usage.rateLimited || usage.throttled;
+    node.classList.add(waiting ? 'is-waiting' : 'is-err');
     errEl.hidden = false;
-    errEl.style.color = usage.rateLimited ? 'var(--amb)' : '';
+    errEl.style.color = waiting ? 'var(--amb)' : '';
     errEl.textContent = usage.needsRelogin
       ? 'token inválido — haz /login con esa cuenta y pulsa [i] import'
       : usage.error || 'no se pudo leer el uso';
@@ -241,9 +243,20 @@ async function importCurrent(configDir) {
   }
 }
 
-/* ---------------- add account ---------------- */
-
 /* ---------------- data ---------------- */
+
+// Accounts that lost the race for the rate-limited slot come back as `throttled`, carrying
+// the seconds until their turn. Waiting a whole poll interval for them would be silly, so
+// ask again right after the floor lifts. One timer at a time, and never for a hard 429.
+let queuedRetry = null;
+function scheduleQueuedRetry() {
+  const waits = Object.values(usageById)
+    .filter((u) => u && u.throttled && Number.isFinite(u.retryInS))
+    .map((u) => u.retryInS);
+  if (!waits.length) return;
+  clearTimeout(queuedRetry);
+  queuedRetry = setTimeout(() => { if (!swapping) refresh(false); }, (Math.min(...waits) + 2) * 1000);
+}
 
 async function refresh(force = false) {
   const btn = $('#btn-refresh');
@@ -254,6 +267,7 @@ async function refresh(force = false) {
     usageById = accounts.length ? await api(`/api/usage/all${force ? '?force=1' : ''}`) : {};
     lastFetch = Date.now();
     $('#banner-offline').hidden = true;
+    scheduleQueuedRetry();
 
     const health = await api('/api/health').catch(() => null);
     $('#banner-running').hidden = !(health && health.claudeRunning);
