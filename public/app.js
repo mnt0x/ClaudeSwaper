@@ -396,3 +396,115 @@ setInterval(() => { if (!swapping) refresh(false); }, POLL_MS);
 // API call every time.
 renderSkeletons();
 refresh(false);
+
+/* ---------------- fondo: campo de brasas de fosforo (firma) ----------------
+   Particulas advectadas por un flow-field barato (suma de senos: sin tablas de ruido,
+   sin librerias). Cada brasa nace, brilla y se apaga; al morir reaparece en otro punto.
+   Se dibujan con un sprite radial pre-renderizado en modo aditivo, asi que donde se
+   cruzan brillan mas (aire premium sin coste por-frame de createRadialGradient).
+   Barato y respetuoso: ~30fps, dpr<=1.5, se congela en document.hidden (visibilitychange)
+   y con prefers-reduced-motion pinta UN frame estatico y no arranca el bucle. */
+(function emberField() {
+  const canvas = document.getElementById('field');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d', { alpha: true });
+  if (!ctx) return;
+
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DPR = Math.min(1.5, window.devicePixelRatio || 1);
+  const FRAME = 1000 / 30; // techo de ~30fps
+  let w = 0, h = 0, particles = [], raf = 0, running = false, last = 0;
+
+  // Sprite: un disco de fosforo con caida suave, pre-renderizado una sola vez.
+  const sprite = (() => {
+    const s = document.createElement('canvas');
+    const size = 64; s.width = s.height = size;
+    const c = s.getContext('2d');
+    const g = c.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    g.addColorStop(0, 'rgba(150,255,210,1)');
+    g.addColorStop(0.35, 'rgba(0,255,156,0.55)');
+    g.addColorStop(1, 'rgba(0,255,156,0)');
+    c.fillStyle = g; c.fillRect(0, 0, size, size);
+    return s;
+  })();
+
+  function spawn() {
+    const ttl = 6 + Math.random() * 10; // segundos de vida
+    return {
+      x: Math.random() * w,
+      y: Math.random() * h,
+      life: Math.random() * ttl, // arranca en un punto cualquiera de su vida: sin frames oscuros
+      ttl,
+      r: 5 + Math.random() * 12,  // radio de dibujo del sprite (px)
+      speed: 6 + Math.random() * 16,
+    };
+  }
+
+  function resize() {
+    w = canvas.clientWidth; h = canvas.clientHeight;
+    canvas.width = Math.round(w * DPR);
+    canvas.height = Math.round(h * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // Densidad por area, con techo duro para que no se dispare en pantallas grandes.
+    const target = Math.max(24, Math.min(110, Math.round((w * h) / 15000)));
+    if (particles.length > target) particles.length = target;
+    while (particles.length < target) particles.push(spawn());
+  }
+
+  // Campo de flujo: angulo suave por posicion + tiempo. Barato y sin bordes duros.
+  function flowAngle(x, y, t) {
+    return (Math.sin(x * 0.0016 + t * 0.15)
+          + Math.cos(y * 0.0018 - t * 0.12)
+          + Math.sin((x + y) * 0.001 + t * 0.10)) * 1.15;
+  }
+
+  function frame(dt, t) {
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter'; // aditivo: los cruces brillan mas
+    for (const p of particles) {
+      const a = flowAngle(p.x, p.y, t);
+      p.x += Math.cos(a) * p.speed * dt;
+      p.y += Math.sin(a) * p.speed * dt;
+      p.life += dt;
+      if (p.x < -30) p.x = w + 30; else if (p.x > w + 30) p.x = -30;
+      if (p.y < -30) p.y = h + 30; else if (p.y > h + 30) p.y = -30;
+      if (p.life >= p.ttl) Object.assign(p, spawn(), { life: 0 });
+      // Brillo de brasa: sube y baja a lo largo de la vida (medio seno).
+      const k = Math.sin((p.life / p.ttl) * Math.PI);
+      ctx.globalAlpha = 0.06 + k * 0.42;
+      const d = p.r * 2;
+      ctx.drawImage(sprite, p.x - p.r, p.y - p.r, d, d);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function loop(ts) {
+    raf = requestAnimationFrame(loop);
+    const elapsed = ts - last;
+    if (elapsed < FRAME) return; // throttle a ~30fps
+    last = ts;
+    frame(Math.min(0.05, elapsed / 1000), ts / 1000);
+  }
+
+  function start() {
+    if (running || reduce) return;
+    running = true; last = performance.now();
+    raf = requestAnimationFrame(loop);
+  }
+  function stop() { running = false; cancelAnimationFrame(raf); }
+
+  resize();
+  frame(0, 0); // primer frame: campo visible al instante (y unico frame si reduce)
+
+  let rt = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => { resize(); if (reduce || !running) frame(0, performance.now() / 1000); }, 150);
+  });
+  // Fuera de vista = no gastar: el bucle se para y se reanuda con la pestana.
+  document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
+
+  start();
+})();
+

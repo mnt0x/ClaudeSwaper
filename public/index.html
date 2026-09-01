@@ -12,6 +12,11 @@
 </head>
 <body>
 
+<!-- Fondo firma: campo de brasas de fosforo a la deriva (flow-field). Lo pinta app.js en
+     este canvas, a pantalla completa y DETRAS de todo (z-index:-1 en .field, CSS). Sin
+     eventos (pointer-events:none via CSS). aria-hidden: es puramente ambiental. -->
+<canvas class="field" id="field" aria-hidden="true"></canvas>
+
 <!-- Icon set: one library, one stroke weight, referenced by <use>. -->
 <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
   <defs>

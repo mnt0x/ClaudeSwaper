@@ -58,48 +58,20 @@ body {
   padding: 0 clamp(1rem, 4vw, 2.5rem) 5rem;
 }
 
-/* ---------- fondo: malla verde viva a pantalla completa ----------
-   Dos capas de halos de fosforo que se mueven de verdad —orbitas amplias, velocidades
-   distintas— y se cruzan, asi que el fondo ONDULA en lugar de quedarse quieto. Solo CSS,
-   detras de todo (pointer-events:none). Todo en verde: ni un tono fuera de la marca. Los
-   datos viven sobre superficie opaca, asi que el brillo nunca les roba contraste. */
-body::before {
-  content: "";
+/* ---------- fondo: campo de brasas de fosforo (canvas) ----------
+   Lo pinta app.js: un flow-field (suma de senos) advecta ~110 brasas que nacen, brillan y
+   se apagan, dibujadas con un sprite radial pre-renderizado en modo aditivo (los cruces
+   brillan mas). Aqui solo colocamos el canvas a pantalla completa, DETRAS de todo y sin
+   capturar el raton. Con prefers-reduced-motion se queda en un frame estatico. Un solo verde;
+   los datos van sobre superficie OPACA, asi que el brillo nunca les roba contraste. */
+.field {
   position: fixed;
-  inset: -45%;
-  z-index: -2;
-  pointer-events: none;
-  background:
-    radial-gradient(32% 34% at 28% 30%, rgba(0, 255, 156, 0.22), transparent 60%),
-    radial-gradient(30% 30% at 68% 42%, rgba(28, 224, 158, 0.16), transparent 62%),
-    radial-gradient(38% 36% at 52% 82%, rgba(0, 255, 156, 0.13), transparent 64%);
-  filter: blur(48px);
-  animation: mesh-a 15s ease-in-out infinite;
-  will-change: transform;
-}
-body::after {
-  content: "";
-  position: fixed;
-  inset: -45%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: -1;
   pointer-events: none;
-  background:
-    radial-gradient(28% 30% at 80% 20%, rgba(0, 255, 156, 0.16), transparent 60%),
-    radial-gradient(30% 32% at 18% 74%, rgba(20, 200, 150, 0.13), transparent 62%);
-  filter: blur(54px);
-  animation: mesh-b 20s ease-in-out infinite;
-  will-change: transform;
-}
-@keyframes mesh-a {
-  0%   { transform: translate3d(-14%, -9%, 0) scale(1);    }
-  33%  { transform: translate3d(11%, 7%, 0)   scale(1.18); }
-  66%  { transform: translate3d(-7%, 13%, 0)  scale(1.08); }
-  100% { transform: translate3d(-14%, -9%, 0) scale(1);    }
-}
-@keyframes mesh-b {
-  0%   { transform: translate3d(12%, 9%, 0)   scale(1.12); }
-  50%  { transform: translate3d(-13%, -7%, 0) scale(1);    }
-  100% { transform: translate3d(12%, 9%, 0)   scale(1.12); }
+  display: block;
 }
 
 /* Browser surfaces belong to the design too. */
