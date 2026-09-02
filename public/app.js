@@ -12,14 +12,14 @@ const POLL_MS = 5 * 60 * 1000;
 /* ---------------- idioma ----------------
  *
  * Dos idiomas en un objeto, sin dependencias ni fichero aparte: la interfaz cabe en unas setenta
- * cadenas y un JSON extra costaria una peticion mas en el arranque para no ganar nada.
+ * cadenas y un JSON extra costaría una petición más en el arranque para no ganar nada.
  *
  * Las claves con marcado (<code>, <strong>) se inyectan como HTML, y por eso NUNCA se construyen
- * con datos de fuera: todas viven aqui. Lo que si viene de fuera - un nombre de cuenta, una
+ * con datos de fuera: todas viven aquí. Lo que sí viene de fuera - un nombre de cuenta, una
  * variable de entorno - entra siempre por textContent.
  *
  * Los mensajes de error del SERVIDOR siguen en castellano: llegan ya redactados por la API y
- * traducirlos exigiria que esta devolviera codigos. Esta anotado en el README.
+ * traducirlos exigiría que esta devolviera códigos. Está anotado en el README.
  */
 const I18N = {
   es: {

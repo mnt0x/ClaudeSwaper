@@ -1,6 +1,6 @@
-/* LLMSwapper - instrumento de terminal, monocromo fosforo.
-   Un solo color de marca: el verde #00ff9c. El unico segundo lenguaje de color es la rampa
-   de severidad (ambar -> naranja -> rojo) que solo aparece cuando una barra se llena: el
+/* LLMSwapper - instrumento de terminal, monocromo fósforo.
+   Un solo color de marca: el verde #00ff9c. El único segundo lenguaje de color es la rampa
+   de severidad (ámbar -> naranja -> rojo) que solo aparece cuando una barra se llena: el
    color de una barra ES su estado, se lee de un vistazo. Fondo: una malla verde animada. */
 
 :root {
@@ -19,7 +19,7 @@
   --phos: #00ff9c;
   --phos-dim: rgba(0, 255, 156, 0.13);
 
-  /* Canal vacio del medidor. Variable y no color fijo porque es lo mas repetido de la pantalla
+  /* Canal vacío del medidor. Variable y no color fijo porque es lo más repetido de la pantalla
      y en claro un #14211c se lee como una fila de barras negras. */
   --track: #14211c;
 
@@ -43,11 +43,11 @@
 }
 
 /* ---------- tema claro ----------
-   Solo se redefinen los colores: nada de geometria, tipografia ni tiempos, que son los mismos
-   instrumentos con otra luz. El fosforo baja a #00875a porque #00ff9c sobre blanco da 1.4:1 y
+   Solo se redefinen los colores: nada de geometría, tipografía ni tiempos, que son los mismos
+   instrumentos con otra luz. El fósforo baja a #00875a porque #00ff9c sobre blanco da 1.4:1 y
    es ilegible; a este verde le salen 4.6:1 sobre la superficie, que pasa AA para texto grande y
    para los elementos de interfaz. Igual con los tres colores de severidad, elegidos oscuros para
-   que un 97% siga leyendose de un vistazo y no como un pastel. */
+   que un 97% siga leyéndose de un vistazo y no como un pastel. */
 :root[data-theme="light"] {
   --bg: #e6ebe9;
   --surface-1: #ffffff;
@@ -70,17 +70,17 @@
   --glow: rgba(0, 135, 90, 0.28);
   --track: #d6e0dc;
 
-  /* Sombra en dos capas: una linea de contacto de 1px y una difusa y elevada. Es lo que separa
-     una tarjeta de un rectangulo, y en claro no hay otra forma de decirlo - un fondo oscuro
-     insinua profundidad solo con un borde, uno claro no. El tono lleva el verde de la marca en
+  /* Sombra en dos capas: una línea de contacto de 1px y una difusa y elevada. Es lo que separa
+     una tarjeta de un rectángulo, y en claro no hay otra forma de decirlo - un fondo oscuro
+     insinúa profundidad solo con un borde, uno claro no. El tono lleva el verde de la marca en
      vez de negro puro: una sombra gris sobre un fondo verdoso se lee sucia. */
   --lift-1: 0 1px 2px rgba(13, 38, 29, 0.055);
   --lift-2: 0 12px 32px -18px rgba(13, 38, 29, 0.2);
 }
 
-/* Colores cableados para fondo oscuro que en claro dejan de funcionar. Se anulan aqui en vez de
+/* Colores cableados para fondo oscuro que en claro dejan de funcionar. Se anulan aquí en vez de
    convertirlos todos en variables: son los pocos que de verdad rompen, y el resto del fichero
-   sigue leyendose como esta escrito. */
+   sigue leyéndose como está escrito. */
 :root[data-theme="light"] .btn:hover:not(:disabled) { background: var(--surface-2); }
 :root[data-theme="light"] .btn:active:not(:disabled) { background: var(--line); }
 :root[data-theme="light"] .logo-trace { color: var(--phos); }
@@ -95,14 +95,14 @@
 :root[data-theme="light"] .tab-rescan:hover { background: rgba(0, 135, 90, 0.12); }
 :root[data-theme="light"] .row.is-active { background: rgba(0, 135, 90, 0.05); }
 :root[data-theme="light"] .row.is-active .state-dot { box-shadow: 0 0 8px rgba(0, 135, 90, 0.55); }
-/* La sombra del panel esta calibrada sobre negro; en claro un 0.9 de negro parece suciedad. */
+/* La sombra del panel está calibrada sobre negro; en claro un 0.9 de negro parece suciedad. */
 :root[data-theme="light"] .panel { box-shadow: var(--lift-1), var(--lift-2); }
-/* El filo rim-lit de fosforo es un gesto de pantalla oscura: sobre blanco no se lee como luz
+/* El filo rim-lit de fósforo es un gesto de pantalla oscura: sobre blanco no se lee como luz
    rasante sino como un borde verdoso mal renderizado. En claro el borde de 1px y la sombra ya
-   dicen "esto es una tarjeta", que era su unico trabajo. */
+   dicen "esto es una tarjeta", que era su único trabajo. */
 :root[data-theme="light"] .panel::after { display: none; }
-/* La lengueta activa se apoya en el panel, asi que comparte su lenguaje de sombra - pero solo
-   hacia arriba, para que el borde inferior siga fundiendose con el panel. */
+/* La lengüeta activa se apoya en el panel, así que comparte su lenguaje de sombra - pero solo
+   hacia arriba, para que el borde inferior siga fundiéndose con el panel. */
 :root[data-theme="light"] .tab[aria-selected="true"] { box-shadow: 0 -1px 2px rgba(13, 38, 29, 0.05); }
 :root[data-theme="light"] .btn { box-shadow: var(--lift-1); }
 :root[data-theme="light"] .btn:active:not(:disabled) { box-shadow: none; }
@@ -110,18 +110,18 @@
 :root[data-theme="light"] .field-row { box-shadow: var(--lift-1), var(--lift-2); }
 :root[data-theme="light"] .toast { box-shadow: var(--lift-1), 0 16px 36px -20px rgba(13, 38, 29, 0.3); }
 
-/* La regla del encabezado marcaba tan poco que el titulo flotaba. Un pelo mas de peso y la
-   pagina gana una estructura: cabecera, contenido. */
+/* La regla del encabezado marcaba tan poco que el título flotaba. Un pelo más de peso y la
+   página gana una estructura: cabecera, contenido. */
 :root[data-theme="light"] .masthead { border-bottom-color: var(--line-strong); }
 
 /* El acento verde solo donde significa algo: fila activa y su canto. En claro el resplandor
-   difuso del modo oscuro se convierte en suciedad, asi que el canto se recorta y se satura. */
+   difuso del modo oscuro se convierte en suciedad, así que el canto se recorta y se satura. */
 :root[data-theme="light"] .row.is-active::before { box-shadow: none; }
 :root[data-theme="light"] .row.is-active .state-dot { box-shadow: 0 0 0 3px rgba(0, 135, 90, 0.15); }
 :root[data-theme="light"] .scope-pin { border-color: var(--line-strong); box-shadow: var(--lift-1); }
 :root[data-theme="light"] *::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
 
-/* La rampa de severidad tambien: los tres tonos claros pierden contraste sobre blanco. */
+/* La rampa de severidad también: los tres tonos claros pierden contraste sobre blanco. */
 :root[data-theme="light"] .meter[data-sev="normal"]   { --glow: rgba(0, 135, 90, 0.3); }
 :root[data-theme="light"] .meter[data-sev="medium"]   { --glow: rgba(154, 107, 0, 0.3); }
 :root[data-theme="light"] .meter[data-sev="high"]     { --glow: rgba(194, 86, 12, 0.3); }
@@ -131,8 +131,8 @@
    En claro el fondo es el fondo, sin ambiente. */
 :root[data-theme="light"] .field { display: none; }
 
-/* Sustituye al campo de brasas: un halo frio y amplio arriba, con el verde de la marca al 5%.
-   No se percibe como color, se percibe como que la pagina tiene profundidad. */
+/* Sustituye al campo de brasas: un halo frío y amplio arriba, con el verde de la marca al 5%.
+   No se percibe como color, se percibe como que la página tiene profundidad. */
 :root[data-theme="light"] body {
   background:
     radial-gradient(1200px 560px at 50% -14%, rgba(0, 135, 90, 0.055), transparent 68%),
@@ -140,8 +140,8 @@
   background-attachment: fixed;
 }
 
-/* La rejilla del pin del logo y los halos estan calibrados para fondo oscuro; en claro pesan
-   demasiado, asi que se atenuan en vez de desaparecer. */
+/* La rejilla del pin del logo y los halos están calibrados para fondo oscuro; en claro pesan
+   demasiado, así que se atenúan en vez de desaparecer. */
 :root[data-theme="light"] .scope-pin { background: var(--surface-2); }
 
 * { box-sizing: border-box; }
@@ -164,12 +164,12 @@ body {
   padding: 0 clamp(1rem, 4vw, 2.5rem) 5rem;
 }
 
-/* ---------- fondo: campo de brasas de fosforo (canvas) ----------
+/* ---------- fondo: campo de brasas de fósforo (canvas) ----------
    Lo pinta app.js: un flow-field (suma de senos) advecta ~110 brasas que nacen, brillan y
    se apagan, dibujadas con un sprite radial pre-renderizado en modo aditivo (los cruces
-   brillan mas). Aqui solo colocamos el canvas a pantalla completa, DETRAS de todo y sin
-   capturar el raton. Con prefers-reduced-motion se queda en un frame estatico. Un solo verde;
-   los datos van sobre superficie OPACA, asi que el brillo nunca les roba contraste. */
+   brillan más). Aquí solo colocamos el canvas a pantalla completa, DETRAS de todo y sin
+   capturar el ratón. Con prefers-reduced-motion se queda en un frame estático. Un solo verde;
+   los datos van sobre superficie OPACA, así que el brillo nunca les roba contraste. */
 .field {
   position: fixed;
   inset: 0;
@@ -219,7 +219,7 @@ code {
   margin-bottom: 1.25rem;
 }
 
-/* El logo-traza vive a la izquierda del titulo. */
+/* El logo-traza vive a la izquierda del título. */
 .identity { display: flex; align-items: center; gap: 0.8rem; }
 
 /* Pin de osciloscopio: bisel con su propia mini-rejilla. La traza (las flechas) la
@@ -239,8 +239,8 @@ code {
     var(--surface-2);
   box-shadow: inset 0 0 14px rgba(0, 255, 156, 0.07), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
 }
-/* Halo suave del pin (refuerzo estatico tomado de holo-depth): da presencia a la traza
-   sin abrir un segundo motor de animacion. */
+/* Halo suave del pin (refuerzo estático tomado de holo-depth): da presencia a la traza
+   sin abrir un segundo motor de animación. */
 .scope-pin::after {
   content: ""; position: absolute; inset: -30%;
   background: radial-gradient(circle at 50% 50%, rgba(0, 255, 156, 0.12), transparent 62%);
@@ -268,7 +268,7 @@ code {
 
 .masthead h1 {
   margin: 0;
-  /* Injerto de kinetic-brutal/holo: mas presencia que 22px fijos, sin romper el tracking. */
+  /* Injerto de kinetic-brutal/holo: más presencia que 22px fijos, sin romper el tracking. */
   font-size: clamp(22px, 3.2vw, 30px); font-weight: 700;
   letter-spacing: 0.16em;
   color: var(--phos);
@@ -415,8 +415,8 @@ main { max-width: 1180px; margin: 0 auto; }
 .tab:focus-visible { outline: 2px solid var(--phos); outline-offset: -2px; }
 
 /* ---------- conmutadores de idioma y tema ----------
-   Al extremo derecho de la barra, despues de refresh: se tocan una vez y luego se olvidan, asi
-   que no compiten por atencion con las acciones que si se repiten. */
+   Al extremo derecho de la barra, después de refresh: se tocan una vez y luego se olvidan, así
+   que no compiten por atención con las acciones que sí se repiten. */
 .switch {
   display: flex; align-items: center;
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
@@ -450,9 +450,9 @@ main { max-width: 1180px; margin: 0 auto; }
 .tab-rescan:hover { color: var(--phos); background: rgba(0, 255, 156, 0.1); }
 
 /* ---------- barrido de distros ----------
-   Mientras busca, las pestañas laten en cascada: cada una entra 90 ms despues que la anterior,
-   asi que el ojo lee un recorrido de izquierda a derecha y no cuatro cosas parpadeando a la vez.
-   Es la diferencia entre "esta buscando" y "algo va mal". */
+   Mientras busca, las pestañas laten en cascada: cada una entra 90 ms después que la anterior,
+   así que el ojo lee un recorrido de izquierda a derecha y no cuatro cosas parpadeando a la vez.
+   Es la diferencia entre "está buscando" y "algo va mal". */
 @keyframes tab-scan {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.3; }
@@ -463,16 +463,16 @@ main { max-width: 1180px; margin: 0 auto; }
 .tabs.is-scanning .tab:nth-child(4) { animation-delay: 270ms; }
 .tabs.is-scanning .tab:nth-child(n+5) { animation-delay: 360ms; }
 
-/* Una pestaña recien aparecida se senala sola una vez y se apaga: en una fila de cuatro,
-   "hay una nueva" sin decir cual no sirve de nada. */
+/* Una pestaña recién aparecida se señala sola una vez y se apaga: en una fila de cuatro,
+   "hay una nueva" sin decir cuál no sirve de nada. */
 @keyframes tab-new {
   0%   { background: var(--phos); color: var(--bg); }
   100% { background: transparent; color: var(--text-3); }
 }
 .tab.is-new { animation: tab-new 1900ms var(--ease); }
 
-/* Quien pide menos movimiento sigue necesitando saber que esta pasando: en vez de latir, las
-   pestanas se atenuan mientras dura el barrido. */
+/* Quien pide menos movimiento sigue necesitando saber que está pasando: en vez de latir, las
+   pestañas se atenúan mientras dura el barrido. */
 @media (prefers-reduced-motion: reduce) {
   .tabs.is-scanning .tab { animation: none; opacity: 0.45; }
   .tab.is-new { animation: none; }
@@ -489,8 +489,8 @@ main { max-width: 1180px; margin: 0 auto; }
 
 /* ---------- panel ---------- */
 
-/* Elevacion declarada una vez: borde + una superficie opaca para que la rejilla del
-   fondo quede en los margenes y los datos se lean limpios (chasis del instrumento). */
+/* Elevación declarada una vez: borde + una superficie opaca para que la rejilla del
+   fondo quede en los márgenes y los datos se lean limpios (chasis del instrumento). */
 .panel {
   position: relative;
   border: 1px solid var(--line);
@@ -500,10 +500,10 @@ main { max-width: 1180px; margin: 0 auto; }
   box-shadow: 0 1px 0 rgba(0, 255, 156, 0.04) inset, 0 24px 60px -30px rgba(0, 0, 0, 0.9);
 }
 
-/* Filo rim-lit de fosforo que se desvanece, ESTATICO. Ata el lenguaje del bisel del pin
+/* Filo rim-lit de fósforo que se desvanece, ESTATICO. Ata el lenguaje del bisel del pin
    a la superficie plana del panel sin abrir un segundo gesto ambiental
    ni usar backdrop-filter. Solo se pinta si el navegador sabe recortar el anillo; si no,
-   se degrada a nada (el borde solido del .panel se mantiene). */
+   se degrada a nada (el borde sólido del .panel se mantiene). */
 @supports ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
   .panel::after {
     content: ""; position: absolute; inset: 0; z-index: 1;
@@ -582,8 +582,8 @@ main { max-width: 1180px; margin: 0 auto; }
 
 
 /* ---------- meters ----------
-   El color de la barra ES su estado, igual en sesion y en semana: verde mientras hay
-   margen, y sube por ambar -> naranja -> rojo segun se llena. Sin colores decorativos:
+   El color de la barra ES su estado, igual en sesión y en semana: verde mientras hay
+   margen, y sube por ámbar -> naranja -> rojo según se llena. Sin colores decorativos:
    un tono distinto siempre significa algo. */
 .meter { min-width: 0; display: flex; flex-direction: column; gap: 0.34rem; }
 .meter[data-sev="normal"]   { --sev: var(--ok);   --glow: rgba(0, 255, 156, 0.35); }
@@ -598,7 +598,7 @@ main { max-width: 1180px; margin: 0 auto; }
   font-size: 13px; font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--sev);
-  /* Halo de lectura de fosforo: el nucleo del glifo no cambia, asi que el contraste AA
+  /* Halo de lectura de fósforo: el núcleo del glifo no cambia, así que el contraste AA
      se mantiene; el halo solo da el brillo de instrumento. */
   text-shadow: 0 0 12px var(--glow);
   min-width: 3.2em; flex: none;
@@ -606,9 +606,9 @@ main { max-width: 1180px; margin: 0 auto; }
 }
 .meter[data-sev="unknown"] .value { color: var(--text-3); text-shadow: none; }
 
-/* El numero-heroe de la fila activa se retira a proposito: la cuenta activa ya tiene su
-   heroe en los gauges radiales del foco (#focus). Duplicar el tratamiento grande aqui
-   era la unica cosa que hacia leer el conjunto como clutter. La fila activa vuelve a ser
+/* El número-héroe de la fila activa se retira a propósito: la cuenta activa ya tiene su
+   héroe en los gauges radiales del foco (#focus). Duplicar el tratamiento grande aquí
+   era la única cosa que hacía leer el conjunto como clutter. La fila activa vuelve a ser
    una lectura sobria; el WOW vive una sola vez, arriba. */
 
 /* The segment comb is a mask over both track and fill, so the cells line up exactly
@@ -627,8 +627,8 @@ main { max-width: 1180px; margin: 0 auto; }
   transform-origin: left center;
   background: var(--sev);
   /* transform, not width: the compositor handles it and no layout is triggered.
-     steps() en el llenado = latido mecanico, honestidad de instrumento (injerto de
-     kinetic-brutal, mejor aqui que en una rejilla brutalista). */
+     steps() en el llenado = latido mecánico, honestidad de instrumento (injerto de
+     kinetic-brutal, mejor aquí que en una rejilla brutalista). */
   transition: transform 520ms steps(16, end), background-color var(--dur) var(--ease);
 }
 
@@ -696,8 +696,8 @@ main { max-width: 1180px; margin: 0 auto; }
 }
 /* El nombre es opcional y corto: no debe competir por el ancho con el token, que es largo. */
 #token-label { flex: 0 1 11rem; min-width: 7rem; }
-/* flex-start, no center: todo lo demas dentro de .empty (h2, .steps, .footnote) va alineado a
-   la izquierda, y centrar solo los botones rompia el margen izquierdo de la tarjeta. */
+/* flex-start, no center: todo lo demás dentro de .empty (h2, .steps, .footnote) va alineado a
+   la izquierda, y centrar solo los botones rompía el margen izquierdo de la tarjeta. */
 .empty-actions { display: flex; gap: 0.5rem; justify-content: flex-start; flex-wrap: wrap; }
 .field-line input::placeholder { color: var(--text-3); }
 .field-line input:focus-visible { border-color: var(--phos); outline-offset: 1px; }

@@ -6,8 +6,8 @@
 <title>LLMSwapper</title>
 <meta name="color-scheme" content="dark light">
 <link rel="stylesheet" href="/style.css">
-<!-- Tema antes de pintar: leerlo aqui, sincrono, evita el fogonazo oscuro de un cuadro entero
-     cuando la preferencia guardada es clara. Es la unica razon por la que hay JS en el head. -->
+<!-- Tema antes de pintar: leerlo aquí, síncrono, evita el fogonazo oscuro de un cuadro entero
+     cuando la preferencia guardada es clara. Es la única razón por la que hay JS en el head. -->
 <script>
   try {
     var t = localStorage.getItem('swapper.theme');
@@ -18,15 +18,15 @@
     document.documentElement.lang = l;
   } catch (e) { document.documentElement.dataset.theme = 'dark'; }
 </script>
-<!-- Favicon = el mismo logo de la web: las dobles flechas #i-swap, verde fosforo sobre
-     el fondo del pin. Trazo algo mas grueso (1.8) para que se lea a 16px en la pestana. -->
+<!-- Favicon = el mismo logo de la web: las dobles flechas #i-swap, verde fósforo sobre
+     el fondo del pin. Trazo algo más grueso (1.8) para que se lea a 16px en la pestaña. -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'><rect width='18' height='18' rx='4' fill='%23040706'/><g fill='none' stroke='%2300ff9c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3.5 6.5h11m0 0-3-3m3 3-3 3'/><path d='M14.5 13.5h-11m0 0 3 3m-3-3 3-3'/></g></svg>">
 </head>
 <body>
 
-<!-- Fondo firma: campo de brasas de fosforo a la deriva (flow-field). Lo pinta app.js en
+<!-- Fondo firma: campo de brasas de fósforo a la deriva (flow-field). Lo pinta app.js en
      este canvas, a pantalla completa y DETRAS de todo (z-index:-1 en .field, CSS). Sin
-     eventos (pointer-events:none via CSS). aria-hidden: es puramente ambiental.
+     eventos (pointer-events:none vía CSS). aria-hidden: es puramente ambiental.
      En tema claro se oculta por CSS: es aditivo y sobre blanco no suma nada. -->
 <canvas class="field" id="field" aria-hidden="true"></canvas>
 
@@ -85,8 +85,8 @@
       <span data-i18n="refresh">refresh</span>
     </button>
 
-    <!-- Idioma y tema. Se tocan una vez y se olvidan, asi que van al extremo, despues de las
-         acciones que si se repiten. aria-pressed marca cual esta activo, que es lo que un
+    <!-- Idioma y tema. Se tocan una vez y se olvidan, así que van al extremo, después de las
+         acciones que sí se repiten. aria-pressed marca cuál está activo, que es lo que un
          lector de pantalla necesita para un par de opciones excluyentes. -->
     <div class="switch" id="switch-lang" role="group" data-i18n-aria="lang.group">
       <button type="button" data-lang="es" aria-pressed="false">ES</button>
@@ -136,9 +136,9 @@
   <p class="field-help" id="dir-help" data-i18n-html="dir.help"></p>
 </form>
 
-<!-- Alta por token de larga duracion (claude setup-token). Mismo patron inline que #dir-form:
-     se queda en la pagina, se puede estilar, y Escape devuelve el foco donde estaba. El campo
-     del token es type=password: no se teclea, se pega, y asi no queda a la vista de nadie que
+<!-- Alta por token de larga duración (claude setup-token). Mismo patrón inline que #dir-form:
+     se queda en la página, se puede estilar, y Escape devuelve el foco donde estaba. El campo
+     del token es type=password: no se teclea, se pega, y así no queda a la vista de nadie que
      mire la pantalla ni lo guarda el autocompletado. -->
 <form class="field-row" id="token-form" hidden>
   <label for="token-input" data-i18n="token.label">Añadir una cuenta con un token de larga duración</label>
