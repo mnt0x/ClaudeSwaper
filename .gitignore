@@ -4,3 +4,6 @@ data/
 node_modules/
 *.tmp
 *.log
+
+# Ruta local a la config de Claude Code. Cada maquina la suya.
+.env
