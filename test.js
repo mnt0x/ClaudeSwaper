@@ -850,6 +850,42 @@ async function checkAsync(name, fn) {
     } finally { store.remove(a.id); }
   });
 
+  check('una cuenta sin perfil escribe su nombre como identidad, en el campo que /status muestra', () => {
+    const blob = { accessToken: FAKE_TOKEN, refreshToken: null, expiresAt: Date.now() + 60000, scopes: ['user:inference'] };
+    const a = store.add({ label: 'Equipo', email: null, profile: null, oauth: blob });
+    try {
+      const ident = swapLib.identityFromLabel(store.get(a.id));
+      // /status renderiza Email y Organization; displayName lo ignora por completo (verificado
+      // contra la TUI real). Poner el nombre solo en displayName dejaría /status en blanco.
+      assert.strictEqual(ident.emailAddress, 'Equipo', 'el nombre debe ir donde /status mira');
+      assert.strictEqual(ident.displayName, 'Equipo');
+      // Lo que NO sabemos de un token de solo inferencia se queda en null: nada inventado.
+      assert.strictEqual(ident.accountUuid, null, 'no se puede inventar un accountUuid');
+      assert.strictEqual(ident.organizationName, null, 'no se puede inventar una organización');
+    } finally { store.remove(a.id); }
+  });
+
+  check('el swap escribe esa identidad en ~/.claude.json y respeta el resto del fichero', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-ident-'));
+    try {
+      const f = path.join(tmp, '.claude.json');
+      fs.writeFileSync(f, JSON.stringify({
+        numStartups: 3, userID: 'INSTALL-ID', projects: { '/x': { history: [7] } },
+        oauthAccount: { emailAddress: 'anterior@x.com', accountUuid: 'viejo' },
+        modelAccessCache: [],
+      }));
+      swapLib.writeClaudeJson(f, swapLib.identityFromLabel({ label: 'Trabajo' }));
+      const cj = JSON.parse(fs.readFileSync(f, 'utf8'));
+      // Sustituye a la anterior, no la deja: mostrar la cuenta de la que saliste es el peor caso.
+      assert.strictEqual(cj.oauthAccount.emailAddress, 'Trabajo');
+      assert.strictEqual(cj.oauthAccount.accountUuid, null);
+      assert.ok(cj.oauthAccount.profileFetchedAt, 'writeClaudeJson sella la marca de tiempo');
+      assert.ok(!('modelAccessCache' in cj), 'las cachés de la cuenta anterior se van');
+      assert.strictEqual(cj.userID, 'INSTALL-ID', 'userID es del instalador, no de la cuenta');
+      assert.deepStrictEqual(cj.projects, { '/x': { history: [7] } });
+    } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  });
+
   await checkAsync('POST /api/accounts/token rechaza un token inválido sin crear nada', async () => {
     const realFetch = global.fetch;
     const server = require('./server').createServer(7998);
