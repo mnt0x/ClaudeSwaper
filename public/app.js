@@ -158,11 +158,6 @@ function buildRow(account, target) {
 
   $('.name', node).textContent = account.label;
   $('.mail', node).textContent = account.email || '';
-  // planLabel returns null rather than guessing "Claude" for an account we never identified.
-  // The label describes the TOKEN, not a missing feature: such an account does show meters, but
-  // they arrive from the rate-limit headers of a probe rather than from the usage endpoint, and
-  // its plan is genuinely unknown because the profile endpoint will not answer it.
-  $('.plan', node).textContent = account.plan || (account.canReadUsage ? '' : 'solo inferencia');
 
   const usable = usage && usage.ok ? usage : null;
   const scoped = usable ? (usable.scoped || []).map((s) => `${s.label} ${s.percent}%`).join(' · ') : '';

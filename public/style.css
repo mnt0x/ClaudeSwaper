@@ -313,7 +313,7 @@ main { max-width: 1180px; margin: 0 auto; }
 .columns,
 .row {
   display: grid;
-  grid-template-columns: minmax(190px, 1.4fr) 84px minmax(190px, 1fr) minmax(190px, 1fr) 148px;
+  grid-template-columns: minmax(190px, 1.6fr) minmax(190px, 1fr) minmax(190px, 1fr) 148px;
   align-items: center;
   gap: 1.2rem;
   padding: 0 1rem;
@@ -375,16 +375,6 @@ main { max-width: 1180px; margin: 0 auto; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.plan {
-  justify-self: start;
-  font-size: 10.5px; letter-spacing: 0.04em;
-  color: var(--text-2);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  padding: 0.13rem 0.42rem;
-  white-space: nowrap;
-}
 
 /* ---------- meters ----------
    El color de la barra ES su estado, igual en sesion y en semana: verde mientras hay
@@ -584,20 +574,17 @@ main { max-width: 1180px; margin: 0 auto; }
 
 @media (max-width: 940px) {
   .columns { display: none; }
-  /* The plan badge rides the identity line instead of costing a whole grid row. */
   .row {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "who     plan    actions"
-      "session session session"
-      "weekly  weekly  weekly"
-      "note    note    note";
+      "who     actions"
+      "session session"
+      "weekly  weekly"
+      "note    note";
     gap: 0.7rem 0.75rem;
     padding-top: 0.9rem; padding-bottom: 0.9rem;
   }
-  .plan { align-self: center; }
   .who { grid-area: who; }
-  .plan { grid-area: plan; }
   .meter[data-kind="session"] { grid-area: session; }
   .meter[data-kind="weekly"] { grid-area: weekly; }
   .actions { grid-area: actions; }

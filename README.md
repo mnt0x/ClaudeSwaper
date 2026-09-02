@@ -19,15 +19,15 @@ No `npm install`, no build step, no telemetry, nothing leaves your machine but t
 makes to Anthropic. One `server.js`, seven small modules and three static files.
 
 ```
-Swaper                                                        [ + add token ]  [ refresh ]
+Swaper                                                       [ + add token ]  [ refresh ]
 
-HOST                                                                          [ import ]
-  ● Cyberxia    devs@…       Max 20x   SESSION   2%   WEEK  30%             [  IN USE  ]
-    Castillo    carlos@…     Max 20x   SESSION   0%   WEEK  32%             [   swap   ]
+HOST                                                                         [ import ]
+  ● Cyberxia    devs@…        SESSION   2%   WEEK  30%                    [  IN USE  ]
+    Castillo    carlos@…      SESSION   0%   WEEK  32%                    [   swap   ]
 
-WSL · Ubuntu                                                                  [ import ]
-  ● Castillo    carlos@…     Max 20x   SESSION  12%   WEEK  19%             [  IN USE  ]
-    Cyberxia    devs@…       Max 20x   SESSION   4%   WEEK  23%             [   swap   ]
+WSL · Ubuntu                                                                 [ import ]
+  ● Castillo    carlos@…      SESSION  12%   WEEK  19%                    [  IN USE  ]
+    Cyberxia    devs@…        SESSION   4%   WEEK  23%                    [   swap   ]
 ```
 
 > **The interface is in Spanish.** The labels map one to one onto the sections below:
@@ -83,7 +83,7 @@ would double the outbound rate and rate-limit both. If the port is taken it says
 
 ## Adding accounts
 
-Two ways in, and the choice decides one thing: whether that account can show a plan and an email.
+Two ways in, and the choice decides one thing: whether the account can identify itself.
 
 ### Paste a long-lived token — recommended
 
@@ -95,14 +95,22 @@ Approve it in the browser, copy the token it prints, then press **añadir token*
 the `t` key), paste it and give it a name. **It lasts a year.** No renewal, no logging in again.
 
 `setup-token` grants a single OAuth scope, `user:inference`, so Anthropic will not let it read the
-profile endpoint. Practically: that account has no email and no plan of its own, and shows the name
-you gave it. Its **quota meters still work** — they come from a different source, see below.
+profile endpoint. That account therefore has no identity of its own and shows the name you gave it.
+Its **quota meters still work** — they come from a different source, see below.
+
+There is no way around this, and the panel does not pretend otherwise. The profile endpoint is the
+only thing that knows an account's plan, email and organisation, and it answers an inference-only
+token `403`. The inference response carries no plan or tier header either — the panel reads the
+quota straight off its rate-limit headers, and those are the only account facts on offer. So the
+panel shows no plan column at all rather than an empty one, and the name you give an account is
+what identifies it, in the list and in Claude Code's own `/status`.
 
 ### Import a live session
 
 Sign in with the account in Claude Code (`claude`, then `/login`), then press **import**. Those
-accounts carry the full scope set, so they show email, plan and organisation. The cost is that you
-must log in once per account, and their refresh token dies after ~29 days of not opening the panel.
+accounts carry the full scope set, so they identify themselves — email and organisation — and read
+their quota from the usage endpoint at no token cost. The price is logging in once per account, and
+a refresh token that dies after ~29 days of not opening the panel.
 
 To capture a second account without disturbing the session you are using, start it in a separate
 config directory and import with **Shift + click** on **import**:
@@ -220,9 +228,10 @@ cannot see.
   credentials file.** While any of them is set, switching is a silent no-op: the panel reports
   success, the file changes, and Claude Code keeps using the variable. The panel detects this and
   says so, in the UI and in `/api/health`.
-- **Accounts added by token show no email, plan or organisation.** There is no way to resolve an
-  inference-only token to an identity, and the panel does not invent one — it shows the name you
-  gave it.
+- **Accounts added by token cannot be resolved to an identity** — no email, no plan, no
+  organisation. The profile endpoint rejects such a token and the inference response carries no
+  tier header, so there is nothing to read. The panel shows the name you gave it and invents
+  nothing. Name an account with its real email and `/status` reads as it always did.
 - **Remote Control does not work with `setup-token` accounts.** Anthropic documents it: such a
   token "can only make model requests". Claude Code then prints `Remote Control disconnected —
   /login`, which reads like a login prompt but is not: the session itself is authenticated.
