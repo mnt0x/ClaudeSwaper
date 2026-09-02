@@ -53,6 +53,7 @@ const I18N = {
     'tabs.group': 'Entorno',
     'rescan.title': 'Buscar distros de WSL otra vez',
     'rescan.none': 'Sin cambios: los mismos entornos de antes',
+    'rescan.found': 'Nuevo entorno detectado: {names}',
     'tab.running': 'Claude Code está abierto en {name}',
 
     'empty.title': '0 cuentas registradas',
@@ -130,6 +131,7 @@ const I18N = {
     'tabs.group': 'Environment',
     'rescan.title': 'Scan for WSL distros again',
     'rescan.none': 'No change: the same environments as before',
+    'rescan.found': 'New environment found: {names}',
     'tab.running': 'Claude Code is running in {name}',
 
     'empty.title': 'No accounts yet',
@@ -429,18 +431,46 @@ function sortedFor(target) {
  * but it also means a distro you just installed does not show up for half a minute - and if
  * Claude Code has never run in it, not until it has. This is the button for "I just set that up,
  * look again", which otherwise meant restarting the server.
+ *
+ * It asks for /api/targets and NOTHING else. It used to call refresh(), which also re-fetched
+ * every account and their usage and disabled the toolbar's refresh button while it did - so
+ * looking for a distro spent a slot of the usage endpoint's tiny budget and made the other
+ * button flicker for reasons the user could not connect to what they had just pressed. Two
+ * buttons, two jobs.
  */
 async function rescanTargets(button) {
+  const bar = $('#tabs');
   button.disabled = true;
   button.classList.add('is-loading');
-  const antes = targetList.map((t) => t.id).join('|');
+  bar.classList.add('is-scanning');
+
+  const antes = new Set(targetList.map((x) => x.id));
+  // Un suelo de tiempo: la deteccion puede volver en 80 ms y un parpadeo de 80 ms no se ve, asi
+  // que el boton parece no haber hecho nada. Con medio segundo el barrido se lee.
+  const suelo = new Promise((r) => setTimeout(r, 550));
+
   try {
-    await refresh(false, true);
-    const ahora = targetList.map((t) => t.id).join('|');
-    if (ahora === antes) toast(t('rescan.none'));
+    const res = await api('/api/targets?force=1');
+    await suelo;
+    if (res && Array.isArray(res.targets) && res.targets.length) targetList = res.targets;
+
+    const nuevos = targetList.filter((x) => !antes.has(x.id));
+    render();
+
+    if (nuevos.length) {
+      // Marcar las pestañas nuevas: sin esto, en una fila de cuatro no se ve cual acaba de salir.
+      for (const n of nuevos) {
+        const el = $(`#tabs .tab[data-target="${n.id}"]`);
+        if (el) el.classList.add('is-new');
+      }
+      toast(t('rescan.found', { names: nuevos.map((n) => n.label).join(', ') }), 'ok');
+    } else {
+      toast(t('rescan.none'));
+    }
   } catch (err) {
     toast(err.message, 'err');
   } finally {
+    bar.classList.remove('is-scanning');
     button.disabled = false;
     button.classList.remove('is-loading');
   }
@@ -735,16 +765,16 @@ function scheduleQueuedRetry() {
   queuedRetry = setTimeout(() => { if (!swapping) refresh(false); }, (Math.min(...waits) + 2) * 1000);
 }
 
-async function refresh(force = false, forceTargets = false) {
+async function refresh(force = false) {
   const btn = $('#btn-refresh');
   btn.disabled = true;
   btn.classList.add('is-loading');
   try {
     // Environments first: this drives one section each, with their per-environment active
     // account and running state. Falls back to host-only if the endpoint is unreachable.
-    const t = await api(`/api/targets${forceTargets ? '?force=1' : ''}`).catch(() => null);
-    targetList = (t && Array.isArray(t.targets) && t.targets.length)
-      ? t.targets
+    const res = await api('/api/targets').catch(() => null);
+    targetList = (res && Array.isArray(res.targets) && res.targets.length)
+      ? res.targets
       : [{ id: 'host', label: 'host', kind: 'host', activeId: null, running: false }];
 
     // The accounts are shared across environments; fetch them once. Each section marks its

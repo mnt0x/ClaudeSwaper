@@ -411,6 +411,35 @@ main { max-width: 1180px; margin: 0 auto; }
 }
 .tab-rescan:hover { color: var(--phos); background: rgba(0, 255, 156, 0.1); }
 
+/* ---------- barrido de distros ----------
+   Mientras busca, las pestañas laten en cascada: cada una entra 90 ms despues que la anterior,
+   asi que el ojo lee un recorrido de izquierda a derecha y no cuatro cosas parpadeando a la vez.
+   Es la diferencia entre "esta buscando" y "algo va mal". */
+@keyframes tab-scan {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+.tabs.is-scanning .tab { animation: tab-scan 620ms var(--ease) infinite; }
+.tabs.is-scanning .tab:nth-child(2) { animation-delay: 90ms; }
+.tabs.is-scanning .tab:nth-child(3) { animation-delay: 180ms; }
+.tabs.is-scanning .tab:nth-child(4) { animation-delay: 270ms; }
+.tabs.is-scanning .tab:nth-child(n+5) { animation-delay: 360ms; }
+
+/* Una pestaña recien aparecida se senala sola una vez y se apaga: en una fila de cuatro,
+   "hay una nueva" sin decir cual no sirve de nada. */
+@keyframes tab-new {
+  0%   { background: var(--phos); color: var(--bg); }
+  100% { background: transparent; color: var(--text-3); }
+}
+.tab.is-new { animation: tab-new 1900ms var(--ease); }
+
+/* Quien pide menos movimiento sigue necesitando saber que esta pasando: en vez de latir, las
+   pestanas se atenuan mientras dura el barrido. */
+@media (prefers-reduced-motion: reduce) {
+  .tabs.is-scanning .tab { animation: none; opacity: 0.45; }
+  .tab.is-new { animation: none; }
+}
+
 /* Claude Code abierto en ese entorno. Un punto, no una frase: el aviso de que el cambio va a
    sesiones nuevas ya lo da el swap en su toast, una vez, cuando de verdad importa. */
 .tab-run {
