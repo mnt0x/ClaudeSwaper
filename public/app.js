@@ -221,6 +221,30 @@ function sortedFor(target) {
 }
 
 /**
+ * Re-scan for WSL distros, skipping the server's 30-second cache.
+ *
+ * That cache exists because detection spawns several wsl.exe calls and /api/targets is polled,
+ * but it also means a distro you just installed does not show up for half a minute - and if
+ * Claude Code has never run in it, not until it has. This is the button for "I just set that up,
+ * look again", which otherwise meant restarting the server.
+ */
+async function rescanTargets(button) {
+  button.disabled = true;
+  button.classList.add('is-loading');
+  const antes = targetList.map((t) => t.id).join('|');
+  try {
+    await refresh(false, true);
+    const ahora = targetList.map((t) => t.id).join('|');
+    if (ahora === antes) toast('Sin cambios: los mismos entornos de antes');
+  } catch (err) {
+    toast(err.message, 'err');
+  } finally {
+    button.disabled = false;
+    button.classList.remove('is-loading');
+  }
+}
+
+/**
  * The tab strip. One per environment, in the order the server reports them - host first, then
  * each WSL distro - so the row does not reshuffle between polls.
  *
@@ -231,7 +255,7 @@ function sortedFor(target) {
 function buildTabs() {
   const bar = $('#tabs');
   bar.innerHTML = '';
-  bar.hidden = targetList.length < 2;
+  bar.hidden = false;
 
   for (const target of targetList) {
     const tab = document.createElement('button');
@@ -253,6 +277,17 @@ function buildTabs() {
     tab.addEventListener('click', () => selectTarget(target.id));
     bar.append(tab);
   }
+
+  // Sits after the tabs, not in the toolbar: it re-scans THIS row, and the toolbar's refresh
+  // already means something else (the usage numbers).
+  const rescan = document.createElement('button');
+  rescan.type = 'button';
+  rescan.className = 'btn-icon tab-rescan';
+  rescan.title = 'Buscar distros de WSL otra vez';
+  rescan.setAttribute('aria-label', rescan.title);
+  rescan.innerHTML = '<svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-refresh"/></svg>';
+  rescan.addEventListener('click', () => rescanTargets(rescan));
+  bar.append(rescan);
 }
 
 // The panel for ONE environment: the shared accounts, marked and swappable for that one.
@@ -495,14 +530,14 @@ function scheduleQueuedRetry() {
   queuedRetry = setTimeout(() => { if (!swapping) refresh(false); }, (Math.min(...waits) + 2) * 1000);
 }
 
-async function refresh(force = false) {
+async function refresh(force = false, forceTargets = false) {
   const btn = $('#btn-refresh');
   btn.disabled = true;
   btn.classList.add('is-loading');
   try {
     // Environments first: this drives one section each, with their per-environment active
     // account and running state. Falls back to host-only if the endpoint is unreachable.
-    const t = await api('/api/targets').catch(() => null);
+    const t = await api(`/api/targets${forceTargets ? '?force=1' : ''}`).catch(() => null);
     targetList = (t && Array.isArray(t.targets) && t.targets.length)
       ? t.targets
       : [{ id: 'host', label: 'host', kind: 'host', activeId: null, running: false }];

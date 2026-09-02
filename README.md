@@ -18,21 +18,15 @@
 No `npm install`, no build step, no telemetry, nothing leaves your machine but the two calls it
 makes to Anthropic. One `server.js`, seven small modules and three static files.
 
-```
-Swaper                                                       [ + add token ]  [ refresh ]
+<div align="center">
+  <img src="docs/screenshot.png" alt="The ClaudeSwaper panel: environment tabs, four accounts and their session and weekly quota meters" width="100%">
+  <sub>Accounts and quota figures above are fictional.</sub>
+</div>
 
-HOST                                                                         [ import ]
-  ● Cyberxia    devs@…        SESSION   2%   WEEK  30%                    [  IN USE  ]
-    Castillo    carlos@…      SESSION   0%   WEEK  32%                    [   swap   ]
-
-WSL · Ubuntu                                                                 [ import ]
-  ● Castillo    carlos@…      SESSION  12%   WEEK  19%                    [  IN USE  ]
-    Cyberxia    devs@…        SESSION   4%   WEEK  23%                    [   swap   ]
-```
-
-> **The interface is in Spanish.** The labels map one to one onto the sections below:
-> *añadir token* = add token, *importar* = import, *swap* = switch to this account,
-> *renombrar* = rename, *quitar* = remove, *sesión · 5h* / *semana · 7d* = the two quota windows.
+> **The interface is in Spanish.** *añadir token* = add token, *importar* = import,
+> *swap* = switch to this account, *renombrar* = rename, *quitar* = remove,
+> *sesión · 5h* / *semana · 7d* = the two quota windows,
+> *se reinicia en* = resets in, *actualizado ahora* = refreshed just now.
 
 ---
 
@@ -40,6 +34,7 @@ WSL · Ubuntu                                                                 [ 
 
 - [Why](#why) · [Requirements](#requirements) · [Quick start](#quick-start)
 - [Adding accounts](#adding-accounts) · [Usage meters](#usage-meters) · [Switching](#switching)
+- [Environments](#environments)
 - [Docker](#docker) · [Security](#security) · [Limitations](#limitations)
 - [Troubleshooting](#troubleshooting) · [Development](#development)
 
@@ -153,8 +148,33 @@ Press **swap**. In order, it:
    Everything else - `mcpOAuth`, your projects, history, MCP servers - is left untouched.
 5. Verifies the new token against the API, and **rolls both files back** if anything fails.
 
-Each environment (host, and each WSL distro) tracks its own active account and has its own
-**import** button.
+Each environment tracks its own active account and has its own **import** button.
+
+## Environments
+
+The tabs across the top are the places a swap can write: the host, named after its operating
+system, and every WSL distro. There is no list to configure - it runs `wsl.exe -l -q` and takes
+what comes back, so a distro you install tomorrow shows up on its own.
+
+Two things are filtered out, both deliberately:
+
+- **System distros.** `docker-desktop` and `docker-desktop-data` carry no Claude and no user
+  home worth touching.
+- **Distros where Claude Code has never run.** For each one it resolves `$HOME` and checks that
+  `~/.claude.json` exists over the distro's share. That single test proves three things at once:
+  the distro starts, its share answers, and Claude lives inside. A distro without it is skipped,
+  because there would be nothing there for a swap to rewrite.
+
+Detection spawns several `wsl.exe` calls, so the result is cached for 30 seconds. A distro you
+just set up therefore will not appear on its own straight away: the **↻** button beside the tabs
+re-scans and skips that cache. It says so when nothing changed, rather than leaving you wondering
+whether it did anything.
+
+A dot on a tab means Claude Code is running in that environment. The swap still works; it lands
+on new sessions, and says so when you do it.
+
+WSL is a Windows feature. On macOS and Linux there is one tab, and inside a container there is one
+tab even on Windows, because `wsl.exe` does not exist there.
 
 ## Docker
 

@@ -309,6 +309,17 @@ main { max-width: 1180px; margin: 0 auto; }
 }
 .tab:focus-visible { outline: 2px solid var(--phos); outline-offset: -2px; }
 
+/* El rescan va al final de la fila, separado de las pestañas y sin su hover rojo, que es del
+   botón de quitar. Discreto: se usa una vez cada muchos días. */
+.tab-rescan {
+  flex: none;
+  align-self: center;
+  margin-left: 0.35rem;
+  width: 24px; height: 24px;
+  color: var(--text-3);
+}
+.tab-rescan:hover { color: var(--phos); background: rgba(0, 255, 156, 0.1); }
+
 /* Claude Code abierto en ese entorno. Un punto, no una frase: el aviso de que el cambio va a
    sesiones nuevas ya lo da el swap en su toast, una vez, cuando de verdad importa. */
 .tab-run {
