@@ -4,7 +4,8 @@
 
 **Switch the active AI-subscription account with one click - and see how much of each account's quota is left before you do.**
 
-<sub>Claude Code today. Other subscriptions are on the way - see <a href="#other-providers">Other providers</a>.</sub>
+<sub><b>Today it swaps Claude Code accounts, and only those.</b> The name is a plan, not a claim -
+other AI subscriptions are next. <a href="#other-providers">What is coming, and what makes one viable</a>.</sub>
 
 [![test](https://github.com/monac-cc/LLMSwapper/actions/workflows/test.yml/badge.svg)](https://github.com/monac-cc/LLMSwapper/actions/workflows/test.yml)
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
@@ -16,6 +17,13 @@
 </div>
 
 ---
+
+> **Status: Claude Code only.** Every account you can add today is an Anthropic one, through
+> `claude setup-token` or by importing a live session. Nothing else is wired up yet. The project
+> is called LLMSwapper because the problem is not specific to Claude - any coding tool backed by a
+> personal subscription holds one account at a time - and [Other providers](#other-providers)
+> lists what is next and what actually makes a provider viable. Treat that list as criteria, not
+> as a delivery date.
 
 No `npm install`, no build step, no telemetry, nothing leaves your machine but the two calls it
 makes to Anthropic. One `server.js`, seven small modules and three static files.
@@ -35,9 +43,31 @@ follows your system preference until you pick one.
 
 ---
 
+## Quick start
+
+Node 18 or newer, and Claude Code installed. Nothing else - there is no install step.
+
+```bash
+git clone https://github.com/monac-cc/LLMSwapper.git
+cd LLMSwapper
+node server.js
+```
+
+It opens <http://127.0.0.1:7373>. Another port:
+
+```bash
+PORT=7400 node server.js
+```
+
+The port is fixed on purpose - it does not hop to the next free one. The rate floor that keeps
+this app inside the usage endpoint's budget is enforced **per process**, so a second instance
+would double the outbound rate and rate-limit both. If the port is taken it says so and exits.
+
+---
+
 ## Contents
 
-- [Why](#why) · [Requirements](#requirements) · [Quick start](#quick-start)
+- [Why](#why) · [Requirements](#requirements)
 - [Adding accounts](#adding-accounts) · [Usage meters](#usage-meters) · [Switching](#switching)
 - [Environments](#environments)
 - [Docker](#docker) · [Other providers](#other-providers) · [Security](#security)
@@ -63,24 +93,6 @@ I switch to right now*.
 - **Claude Code**, to mint the tokens (`claude setup-token`) or to import a live session.
 - Works on **Windows, macOS and Linux**. WSL targets are a Windows feature; see
   [Limitations](#limitations).
-
-## Quick start
-
-```bash
-git clone https://github.com/monac-cc/LLMSwapper.git
-cd LLMSwapper
-node server.js
-```
-
-It opens <http://127.0.0.1:7373>. Another port:
-
-```bash
-PORT=7400 node server.js
-```
-
-The port is fixed on purpose - it does not hop to the next free one. The rate floor that keeps
-this app inside the usage endpoint's budget is enforced **per process**, so a second instance
-would double the outbound rate and rate-limit both. If the port is taken it says so and exits.
 
 ## Adding accounts
 
