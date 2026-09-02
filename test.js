@@ -21,7 +21,7 @@ function check(name, fn) {
 
 console.log('\nLLMSwapper self-check\n');
 
-for (const mod of ['lib/paths.js', 'lib/store.js', 'lib/usage.js', 'lib/swap.js', 'lib/credentials.js', 'lib/targets.js']) {
+for (const mod of ['lib/paths.js', 'lib/store.js', 'lib/usage.js', 'lib/swap.js', 'lib/credentials.js', 'lib/targets.js', 'lib/terminal.js']) {
   check(`${mod} module self-check`, () => {
     execFileSync(process.execPath, [path.join(__dirname, mod)], { stdio: 'pipe', timeout: 30000 });
   });
@@ -986,6 +986,51 @@ async function checkAsync(name, fn) {
       global.fetch = realFetch;
       await new Promise((r) => server.close(r));
     }
+  });
+
+  await checkAsync('en contenedor, "abre una terminal" se niega ANTES de lanzar nada', async () => {
+    const realFetch = global.fetch;
+    const server = require('./server').createServer(7995);
+    const antes = process.env.SWAPPER_IN_CONTAINER;
+    // Si el endpoint llegase a spawn, la suite abriría ventanas en la máquina de quien la corre.
+    // Envolver child_process aquí es lo que convierte "creo que no lo llama" en "no lo llama".
+    const cp = require('node:child_process');
+    const spawnReal = cp.spawn;
+    let lanzo = false;
+    try {
+      process.env.SWAPPER_IN_CONTAINER = '1';
+      cp.spawn = (...a) => { lanzo = true; return spawnReal(...a); };
+      await new Promise((r) => server.listen(7995, '127.0.0.1', r));
+
+      const res = await realFetch('http://127.0.0.1:7995/api/token/terminal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Swapper': '1' },
+        body: '{}',
+      });
+      const body = await res.json();
+
+      assert.strictEqual(res.status, 409, 'no es un fallo del servidor: es que ahí no aplica');
+      assert.strictEqual(lanzo, false, 'no debe intentar abrir nada dentro de un contenedor');
+      assert.match(body.error, /contenedor/i, 'el motivo debe decir por qué, no solo que no');
+    } finally {
+      cp.spawn = spawnReal;
+      if (antes === undefined) delete process.env.SWAPPER_IN_CONTAINER;
+      else process.env.SWAPPER_IN_CONTAINER = antes;
+      await new Promise((r) => server.close(r));
+    }
+  });
+
+  check('el comando de la terminal es constante: nada de fuera entra en el argv', () => {
+    const src = fs.readFileSync(path.join(__dirname, 'lib', 'terminal.js'), 'utf8');
+    // La inyeccion solo es posible si algo de la peticion llega hasta aquí. No hay parametros:
+    // openSetupToken no los acepta, y eso es lo que hace irrelevante el resto de la discusión.
+    assert.strictEqual(require('./lib/terminal').openSetupToken.length, 0,
+      'openSetupToken no debe aceptar argumentos');
+    assert.ok(!/req\.|request|body|query|params/.test(src),
+      'lib/terminal.js no debe saber nada de HTTP');
+    // Y el comando viaja como argv, no como una cadena para que un shell la reinterprete.
+    assert.ok(src.includes("const CLI = 'claude'") && src.includes("const ARG = 'setup-token'"),
+      'el comando debe estar en constantes');
   });
 
   await checkAsync('PATCH /api/accounts/:id renombra, y rechaza lo que no es un nombre', async () => {

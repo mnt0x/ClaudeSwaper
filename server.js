@@ -12,6 +12,7 @@ const usage = require('./lib/usage');
 const swap = require('./lib/swap');
 const credentials = require('./lib/credentials');
 const targets = require('./lib/targets');
+const terminal = require('./lib/terminal');
 
 // The host the BROWSER uses, and the only one the Host-header allowlist accepts. Kept separate
 // from the bind address on purpose: a container has to listen on all of its own interfaces to be
@@ -311,6 +312,32 @@ async function handleApi(req, res, url, port) {
     } catch (err) {
       const status = err.malformed ? 400 : err.status === 401 ? 401 : 502;
       return fail(res, status, err.message);
+    }
+  }
+
+  /**
+   * Abrir una terminal con `claude setup-token`, para no obligar a buscar una y teclearlo.
+   *
+   * No recibe NADA del cliente: el comando es una constante en lib/terminal.js y viaja como argv,
+   * nunca como una cadena que un shell tenga que reinterpretar. El cuerpo de la peticion se
+   * ignora a proposito - no hay ningun parametro que un atacante pudiera doblar.
+   *
+   * Las dos negativas se dan antes de lanzar nada, porque una ventana que parpadea y muere
+   * enseñando "command not found" es peor que un mensaje claro.
+   */
+  if (pathname === '/api/token/terminal' && method === 'POST') {
+    if (P.inContainer()) {
+      return fail(res, 409, 'Dentro de un contenedor no hay terminal que abrir. '
+        + 'Ejecuta "claude setup-token" en tu máquina y pega el token aquí.');
+    }
+    if (!terminal.claudeInstalled()) {
+      return fail(res, 409, 'No encuentro el comando "claude" en el PATH de este proceso. '
+        + 'Instala Claude Code, o ejecuta "claude setup-token" donde lo tengas y pega el token.');
+    }
+    try {
+      return send(res, 200, { ok: true, how: terminal.openSetupToken() });
+    } catch (err) {
+      return fail(res, 500, err.message);
     }
   }
 

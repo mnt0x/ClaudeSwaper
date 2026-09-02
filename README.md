@@ -95,6 +95,12 @@ claude setup-token
 Approve it in the browser, copy the token it prints, then press **añadir token** in the panel (or
 the `t` key), paste it and give it a name. **It lasts a year.** No renewal, no logging in again.
 
+The paste form has an **open a terminal for me** link that runs that command for you, so the only
+step left is the copy. The window is opened with `/k` on Windows and holds on a `read` on Linux,
+because `setup-token` prints the token once and stores it nowhere - a terminal that closed on
+exit would throw it away. It is unavailable inside a container, which has no terminal to open,
+and it says so rather than failing quietly.
+
 `setup-token` grants a single OAuth scope, `user:inference`, so Anthropic will not let it read the
 profile endpoint. That account therefore has no identity of its own and shows the name you gave it.
 Its **quota meters still work** - they come from a different source, see below.

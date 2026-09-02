@@ -48,6 +48,9 @@ const I18N = {
     'token.namePh': 'nombre (opcional)',
     'token.nameAria': 'Nombre para esta cuenta',
     'token.submit': 'añadir',
+    'token.get': 'ábrelo en una terminal',
+    'token.getTitle': 'Abre una terminal y ejecuta claude setup-token por ti',
+    'token.opened': 'Terminal abierta ({how}). Aprueba en el navegador y pega aquí el token.',
     'token.help': 'Genéralo con <code>claude setup-token</code>: vale un año y no hace falta volver a entrar. Solo da permiso de inferencia, así que esa cuenta no podrá mostrar plan ni correo.',
 
     'tabs.group': 'Entorno',
@@ -126,6 +129,9 @@ const I18N = {
     'token.namePh': 'name (optional)',
     'token.nameAria': 'Name for this account',
     'token.submit': 'add',
+    'token.get': 'open a terminal for me',
+    'token.getTitle': 'Opens a terminal and runs claude setup-token for you',
+    'token.opened': 'Terminal opened ({how}). Approve in the browser, then paste the token here.',
     'token.help': 'Mint one with <code>claude setup-token</code>: it lasts a year and needs no further login. It only grants inference, so that account cannot show a plan or an email.',
 
     'tabs.group': 'Environment',
@@ -734,6 +740,28 @@ async function addByToken(token, label) {
   }
 }
 
+/**
+ * Pide al servidor que abra una terminal con `claude setup-token`.
+ *
+ * No intenta capturar el token: haria falta un pty, el flujo pasa por el navegador de todos modos,
+ * y meter un secreto de un año a traves de nuestro proceso para ahorrar un Ctrl+V no sale a
+ * cuenta. Lo que si hace es dejar el foco en el campo, que es donde va a acabar el pegado.
+ */
+async function getTokenInTerminal(button) {
+  button.disabled = true;
+  button.classList.add('is-loading');
+  try {
+    const r = await api('/api/token/terminal', { method: 'POST', body: {} });
+    toast(t('token.opened', { how: r.how }), 'ok');
+    tokenInput.focus();
+  } catch (err) {
+    toast(err.message, 'err');
+  } finally {
+    button.disabled = false;
+    button.classList.remove('is-loading');
+  }
+}
+
 async function importCurrent(configDir, targetId = 'host') {
   const buttons = [...$$('.btn-import-env'), $('#btn-import-empty')].filter(Boolean);
   buttons.forEach((b) => { b.disabled = true; b.classList.add('is-loading'); });
@@ -896,6 +924,8 @@ tokenForm.addEventListener('submit', async (e) => {
   else tokenInput.focus();
 });
 $('#token-cancel').addEventListener('click', closeTokenField);
+const btnGetToken = $('#btn-get-token');
+btnGetToken.addEventListener('click', () => getTokenInTerminal(btnGetToken));
 for (const el of [tokenInput, tokenLabelInput]) {
   el.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTokenField(); });
 }

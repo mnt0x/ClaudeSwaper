@@ -304,6 +304,7 @@ only shape allowed to reach the browser; it strips `oauth` and `userID`.
 | POST | `/api/swap/dryrun` | `{id, target?}` -> what would change, writes nothing |
 | POST | `/api/accounts/import` | `{configDir?, target?}` -> `{ok, account}` |
 | POST | `/api/accounts/token` | `{token, label?}` -> `{ok, kind, warnings[], account}` - paste a long-lived token |
+| POST | `/api/token/terminal` | `{}` -> `{ok, how}` - opens a terminal running `claude setup-token`; 409 in a container or without the CLI |
 | PATCH | `/api/accounts/:id` | `{label?, color?}` |
 | DELETE | `/api/accounts/:id` | `{ok}` |
 

@@ -151,7 +151,13 @@
     <button class="btn btn-primary" type="submit" data-i18n="token.submit">añadir</button>
     <button class="btn" type="button" id="token-cancel" data-i18n="cancel">cancelar</button>
   </div>
-  <p class="field-help" id="token-help" data-i18n-html="token.help"></p>
+  <p class="field-help" id="token-help">
+    <span data-i18n-html="token.help"></span>
+    <!-- Vive en la ayuda y no en la fila de controles: es la respuesta a "no tengo ninguno",
+         que es una pregunta previa a rellenar el campo, no un cuarto boton que compita con el. -->
+    <button class="btn btn-inline" type="button" id="btn-get-token"
+            data-i18n="token.get" data-i18n-title="token.getTitle">consíguelo</button>
+  </p>
 </form>
 
 <main>
