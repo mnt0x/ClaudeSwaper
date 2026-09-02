@@ -15,8 +15,9 @@ let accounts = [];
 let usageById = {};
 let lastFetch = 0;
 let swapping = false;
-// AbortController of the row confirmation currently open, if any. Also doubles as "a
-// destructive question is on screen", which the keyboard shortcuts must not talk over.
+// AbortController of the inline row interaction currently open — a "¿quitar?" confirmation or a
+// rename — if any. Also doubles as "this row is mid-conversation with the user", which the
+// keyboard shortcuts must not talk over and which render() aborts before replacing the node.
 let openConfirm = null;
 // Environments shown at once, from /api/targets: [{id,label,kind,activeId,running}]. The
 // account list is shared; each section marks its own active account and swaps into it.
@@ -124,6 +125,11 @@ function renderSkeletons(n = 2) {
 
 function noteFor(usage) {
   if (!usage) return null;
+  // A token that only does inference can NEVER report usage. That is a permanent property of the
+  // account, not an incident, so it is stated once and quietly in the plan column. Repeating it
+  // as a warning row-note on every render would teach the eye to skip row-notes, and the next
+  // real one — a locked account, a dead token — would be skipped with it.
+  if (usage.unsupported) return null;
   if (usage.ok) {
     if (usage.locked) return { tone: 'warn', text: `Bloqueado: ${usage.locked}` };
     if (usage.stale) {
@@ -147,13 +153,15 @@ function buildRow(account, target) {
 
   node.dataset.id = account.id;
   node.classList.toggle('is-active', isActive);
-  if (usage && !usage.ok) {
+  if (usage && !usage.ok && !usage.unsupported) {
     node.classList.add(usage.needsRelogin ? 'is-error' : 'is-waiting');
   }
 
   $('.name', node).textContent = account.label;
   $('.mail', node).textContent = account.email || '';
-  $('.plan', node).textContent = account.plan || '';
+  // planLabel returns null rather than guessing "Claude" for an account we never identified.
+  // Saying what the token IS explains the empty meters next to it without a second line.
+  $('.plan', node).textContent = account.plan || (account.canReadUsage ? '' : 'solo inferencia');
 
   const usable = usage && usage.ok ? usage : null;
   const scoped = usable ? (usable.scoped || []).map((s) => `${s.label} ${s.percent}%`).join(' · ') : '';
@@ -176,6 +184,11 @@ function buildRow(account, target) {
     swapBtn.title = `Poner ${account.label} como activa en ${target.label}`;
     swapBtn.addEventListener('click', () => doSwap(account.id, target.id, swapBtn));
   }
+  const renameBtn = $('.btn-rename', node);
+  renameBtn.title = `Renombrar ${account.label}`;
+  renameBtn.setAttribute('aria-label', renameBtn.title);
+  renameBtn.addEventListener('click', () => armRename(node, account));
+
   // Per row, or every remove button in the panel announces the same name and a screen
   // reader user cannot tell which account they are about to drop.
   const removeBtn = $('.btn-remove', node);
@@ -297,6 +310,67 @@ function armRemoval(node, account) {
   }, { signal });
 }
 
+/**
+ * Rename in place, in the row itself — the same reasoning as the removal confirmation below it:
+ * a modal would steal focus from the whole page to edit one word.
+ *
+ * Enter commits, Escape cancels, and losing focus commits too, because a click elsewhere after
+ * typing a new name reads as "done", not as "discard what I just wrote". One AbortController owns
+ * every listener, so closing by ANY of those routes drops them all — the bug the removal
+ * confirmation documents in detail, and it applies here for exactly the same reason.
+ */
+function armRename(node, account) {
+  // Not while a "¿quitar?" is on screen: that question owns the row, and answering it would
+  // re-render this input out from under the user mid-word.
+  if (openConfirm) return;
+  const nameEl = $('.name', node);
+  const input = $('.name-edit', node);
+  if (!input.hidden) return;
+
+  const ac = new AbortController();
+  const { signal } = ac;
+  let settled = false;
+
+  const close = () => {
+    if (settled) return;
+    settled = true;
+    input.hidden = true;
+    nameEl.hidden = false;
+    node.classList.remove('is-renaming');
+    if (openConfirm === ac) openConfirm = null;
+    ac.abort();
+  };
+
+  const commit = async () => {
+    const label = input.value.trim();
+    // Nothing typed, or nothing changed: closing quietly beats a toast saying nothing happened.
+    if (!label || label === account.label) { close(); return; }
+    close();
+    try {
+      await api(`/api/accounts/${account.id}`, { method: 'PATCH', body: { label } });
+      await refresh(false);
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  };
+
+  input.value = account.label;
+  nameEl.hidden = true;
+  input.hidden = false;
+  node.classList.add('is-renaming');
+  // Same slot as the removal confirmation: it marks "this row has an inline interaction open",
+  // which render() aborts before replacing the node, and which the hotkeys must not talk over.
+  openConfirm = ac;
+  input.focus();
+  input.select();
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); close(); }
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+  }, { signal });
+  input.addEventListener('blur', commit, { signal });
+}
+
 async function doSwap(id, targetId, button) {
   if (swapping) return;
   swapping = true;
@@ -323,6 +397,28 @@ async function doSwap(id, targetId, button) {
     button.classList.remove('is-loading');
     swapping = false;
     $$('.btn-swap').forEach((b) => { b.disabled = false; });
+  }
+}
+
+/**
+ * Add an account from a pasted long-lived token. Returns whether it landed, so the caller can
+ * decide about the form: on success it is emptied and closed, on failure the value stays put so
+ * a mistyped NAME does not cost the user another trip to the terminal for the token.
+ */
+async function addByToken(token, label) {
+  const buttons = [$('#btn-add-token'), $('#btn-add-token-empty')].filter(Boolean);
+  buttons.forEach((b) => { b.disabled = true; b.classList.add('is-loading'); });
+  try {
+    const result = await api('/api/accounts/token', { method: 'POST', body: { token, label } });
+    toast(`Añadida: ${result.account.label}`, 'ok');
+    for (const w of result.warnings || []) toast(w);
+    await refresh(false);
+    return true;
+  } catch (err) {
+    toast(err.message, 'err');
+    return false;
+  } finally {
+    buttons.forEach((b) => { b.disabled = false; b.classList.remove('is-loading'); });
   }
 }
 
@@ -399,7 +495,14 @@ $('#btn-refresh').addEventListener('click', () => refresh(true));
 const dirForm = $('#dir-form');
 const dirInput = $('#dir-input');
 
-function openDirField() { dirForm.hidden = false; dirInput.focus(); dirInput.select(); }
+function openDirField() {
+  // Symmetric with openTokenField. Without this the two inline forms stacked, and the pasted
+  // token stayed on screen underneath a form that has nothing to do with it.
+  closeTokenField({ focusBack: false });
+  dirForm.hidden = false;
+  dirInput.focus();
+  dirInput.select();
+}
 function closeDirField() {
   dirForm.hidden = true; dirInput.value = '';
   const back = $('.btn-import-env') || $('#btn-import-empty');
@@ -418,6 +521,48 @@ dirForm.addEventListener('submit', async (e) => {
 $('#dir-cancel').addEventListener('click', closeDirField);
 dirInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDirField(); });
 
+/* ---------------- alta por token ---------------- */
+
+const tokenForm = $('#token-form');
+const tokenInput = $('#token-input');
+const tokenLabelInput = $('#token-label');
+
+function openTokenField() {
+  closeTokenField({ focusBack: false }); // no-op if it was closed; clears any half-typed token
+  dirForm.hidden = true;                 // one inline form at a time, or they stack and confuse
+  tokenForm.hidden = false;
+  tokenInput.focus();
+}
+// focusBack is refused when another field is about to take the focus itself: returning it to the
+// toolbar button first would yank it back out from under the field the user just asked for.
+function closeTokenField({ focusBack = true } = {}) {
+  const wasOpen = !tokenForm.hidden;
+  tokenForm.hidden = true;
+  // A year-long credential should not outlive the form that carried it. Clearing on close means
+  // it is gone from the DOM the moment the user is done, rather than sitting in a detached input
+  // for as long as the tab stays open.
+  tokenInput.value = '';
+  tokenLabelInput.value = '';
+  if (!focusBack || !wasOpen) return;
+  const back = $('#btn-add-token') || $('#btn-add-token-empty');
+  if (back) back.focus();
+}
+
+tokenForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const token = tokenInput.value.trim();
+  if (!token) { tokenInput.focus(); return; }
+  if (await addByToken(token, tokenLabelInput.value.trim())) closeTokenField();
+  else tokenInput.focus();
+});
+$('#token-cancel').addEventListener('click', closeTokenField);
+for (const el of [tokenInput, tokenLabelInput]) {
+  el.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTokenField(); });
+}
+$('#btn-add-token').addEventListener('click', openTokenField);
+const emptyToken = $('#btn-add-token-empty');
+if (emptyToken) emptyToken.addEventListener('click', openTokenField);
+
 // The empty state only exists before any account, i.e. host.
 const emptyImport = $('#btn-import-empty');
 if (emptyImport) emptyImport.addEventListener('click', (e) => (e.shiftKey ? openDirField() : importCurrent(null, 'host')));
@@ -430,6 +575,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
   if (e.key === 'r') refresh(true);
   if (e.key === 'i') importCurrent(null, 'host');
+  if (e.key === 't') openTokenField();
 });
 
 // Countdowns tick locally; no API call involved.

@@ -638,6 +638,223 @@ async function checkAsync(name, fn) {
     }
   });
 
+  /* ---------------- tokens de larga duración (claude setup-token) ---------------- */
+
+  // Ensamblado en tiempo de ejecución a propósito: escrito entero dispararía el propio check
+  // "no source file hardcodes a token" de este mismo fichero.
+  const FAKE_TOKEN = ['sk', 'ant', 'oat01', 'A'.repeat(24)].join('-');
+  const store = require('./lib/store');
+
+  await checkAsync('un token con forma inválida se rechaza sin tocar la red', async () => {
+    const realFetch = global.fetch;
+    let called = false;
+    try {
+      global.fetch = async () => { called = true; throw new Error('no debería llamarse'); };
+      await assert.rejects(() => oauth.probeToken('esto-no-es-un-token'), (e) => e.malformed === true);
+      await assert.rejects(() => oauth.probeToken(''), (e) => e.malformed === true);
+      await assert.rejects(() => oauth.probeToken(null), (e) => e.malformed === true);
+      assert.strictEqual(called, false, 'la validación de forma es local: no debe gastar una petición');
+    } finally { global.fetch = realFetch; }
+  });
+
+  await checkAsync('un 403 por scope IDENTIFICA un token de solo inferencia, no lo rechaza', async () => {
+    const realFetch = global.fetch;
+    try {
+      global.fetch = async () => ({
+        ok: false, status: 403, headers: { get: () => null },
+        text: async () => JSON.stringify({ error: { message: 'OAuth token does not meet scope requirement user:profile' } }),
+      });
+      // Anthropic solo comprueba scopes en un token que YA autenticó, así que este 403 prueba que
+      // el token es real. Tratarlo como fallo dejaría fuera justo el caso que buscamos.
+      assert.strictEqual((await oauth.probeToken(FAKE_TOKEN)).kind, 'inference');
+    } finally { global.fetch = realFetch; }
+  });
+
+  await checkAsync('un 401 rechaza el token', async () => {
+    const realFetch = global.fetch;
+    try {
+      global.fetch = async () => ({
+        ok: false, status: 401, headers: { get: () => null },
+        text: async () => JSON.stringify({ error: { message: 'OAuth access token is invalid.' } }),
+      });
+      await assert.rejects(() => oauth.probeToken(FAKE_TOKEN), (e) => e.status === 401);
+    } finally { global.fetch = realFetch; }
+  });
+
+  await checkAsync('un 200 identifica un token de scope completo', async () => {
+    const realFetch = global.fetch;
+    try {
+      global.fetch = async () => ({ ok: true, status: 200, headers: { get: () => null }, text: async () => '{}' });
+      assert.strictEqual((await oauth.probeToken(FAKE_TOKEN)).kind, 'full');
+    } finally { global.fetch = realFetch; }
+  });
+
+  await checkAsync('una cuenta de solo inferencia NUNCA consulta el endpoint de uso', async () => {
+    const realFetch = global.fetch;
+    let called = false;
+    try {
+      usage.invalidate(); usage.resetCooldown();
+      global.fetch = async () => { called = true; throw new Error('no debería llamarse'); };
+      const r = await usage.fetchFor({ id: 'inf1', oauth: { accessToken: 't', scopes: ['user:inference'] } });
+      // Ese endpoint responde 403 permanente a este token, y el cupo es de ~5 peticiones por
+      // 5 minutos para TODA la app. Gastarlo aquí dejaría sin datos a las cuentas que sí pueden.
+      assert.strictEqual(called, false, 'un 403 garantizado no debe gastar el presupuesto compartido');
+      assert.strictEqual(r.unsupported, true);
+      assert.strictEqual(r.needsRelogin, false, 'no es un problema de sesión: no debe pedir re-login');
+    } finally { global.fetch = realFetch; usage.invalidate(); usage.resetCooldown(); }
+  });
+
+  check('writeCredentials no escribe el centinela de token muerto ni deja los scopes vacíos', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-tok-'));
+    try {
+      const f = path.join(tmp, '.credentials.json');
+      fs.writeFileSync(f, JSON.stringify({ mcpOAuth: { keep: 1 } }));
+
+      swapLib.writeCredentials(f, { accessToken: 'A', expiresAt: 1, scopes: ['user:inference'] });
+      const c = JSON.parse(fs.readFileSync(f, 'utf8'));
+      // Claude Code lee refreshToken === "" como "este token ya está muerto" y ni lo intenta.
+      assert.strictEqual(c.claudeAiOauth.refreshToken, null);
+      assert.notStrictEqual(c.claudeAiOauth.refreshToken, '');
+      assert.deepStrictEqual(c.claudeAiOauth.scopes, ['user:inference']);
+      assert.deepStrictEqual(c.mcpOAuth, { keep: 1 }, 'mcpOAuth debe sobrevivir');
+
+      // Sin scopes, Claude Code imprime "Not logged in - Please run /login" y sale con 1.
+      swapLib.writeCredentials(f, { accessToken: 'B', expiresAt: 1 });
+      const c2 = JSON.parse(fs.readFileSync(f, 'utf8'));
+      assert.ok(c2.claudeAiOauth.scopes.includes('user:inference'), 'unos scopes vacíos dejan la sesión sin login');
+    } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  });
+
+  check('clearClaudeJsonIdentity borra la identidad anterior y respeta todo lo demás', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-cid-'));
+    try {
+      const f = path.join(tmp, '.claude.json');
+      fs.writeFileSync(f, JSON.stringify({
+        numStartups: 7, userID: 'INSTALL-ID', projects: { '/a': { history: [1] } },
+        mcpServers: { x: { command: 'y' } },
+        oauthAccount: { emailAddress: 'anterior@x.com', accountUuid: 'u1' },
+        modelAccessCache: [], somethingElse: { deep: true },
+      }));
+      const r = swapLib.clearClaudeJsonIdentity(f);
+      const cj = JSON.parse(fs.readFileSync(f, 'utf8'));
+      // Dejarla haría que Claude Code siguiera nombrando la cuenta de la que acabas de salir.
+      assert.ok(!('oauthAccount' in cj));
+      assert.strictEqual(r.clearedIdentity, true);
+      assert.ok(!('modelAccessCache' in cj), 'las cachés de la cuenta anterior también se van');
+      assert.strictEqual(cj.userID, 'INSTALL-ID', 'userID es del instalador, no de la cuenta');
+      assert.strictEqual(cj.numStartups, 7);
+      assert.deepStrictEqual(cj.projects, { '/a': { history: [1] } });
+      assert.deepStrictEqual(cj.mcpServers, { x: { command: 'y' } });
+      assert.deepStrictEqual(cj.somethingElse, { deep: true });
+    } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  });
+
+  check('una cuenta creada desde un token pegado se identifica sola, se deduplica y no filtra nada', () => {
+    const before = store.list().length;
+    const blob = { accessToken: FAKE_TOKEN, refreshToken: null, expiresAt: Date.now() + 60000, scopes: ['user:inference'] };
+    const a = store.add({ label: null, email: null, profile: null, oauth: blob });
+    try {
+      // Sin accountUuid ni email, el propio token es la única identidad estable disponible.
+      assert.strictEqual(store.idForToken(FAKE_TOKEN), a.id);
+      assert.strictEqual(store.add({ label: null, email: null, profile: null, oauth: blob }).id, a.id,
+        'pegar el mismo token dos veces debe actualizar, no duplicar');
+      assert.strictEqual(store.list().length, before + 1);
+
+      const view = store.publicView().accounts.find((x) => x.id === a.id);
+      assert.strictEqual(view.canReadUsage, false);
+      assert.strictEqual(view.renewable, false);
+      assert.strictEqual(view.plan, null, 'no debe inventar un plan que nunca ha visto');
+      assert.ok(!JSON.stringify(store.publicView()).includes('sk-ant-'), 'publicView filtró un token');
+    } finally { store.remove(a.id); }
+  });
+
+  check('volver a pegar un token aplica el nombre nuevo, pero un import sin nombre no lo pisa', () => {
+    const blob = { accessToken: FAKE_TOKEN, refreshToken: null, expiresAt: Date.now() + 60000, scopes: ['user:inference'] };
+    const a = store.add({ label: null, email: null, profile: null, oauth: blob });
+    try {
+      // Sin nombre, la etiqueta es el propio id: legible, pero no dice nada.
+      assert.match(a.label, /^token /, 'sin nombre debe caer en la etiqueta derivada del id');
+
+      // Volver a pegar el MISMO token con nombre es la única forma de renombrar desde el panel,
+      // y además es la vía por la que se sustituye un token de un año que no se puede refrescar.
+      const renamed = store.add({ label: 'Trabajo', email: null, profile: null, oauth: blob });
+      assert.strictEqual(renamed.id, a.id, 'debe seguir siendo la misma cuenta');
+      assert.strictEqual(store.get(a.id).label, 'Trabajo', 'el nombre tecleado no puede descartarse en silencio');
+
+      // Pero un caller que no opina sobre el nombre (el import lo pasa null) no debe pisarlo.
+      store.add({ label: null, email: null, profile: null, oauth: blob });
+      assert.strictEqual(store.get(a.id).label, 'Trabajo', 'un import sin nombre debe respetar el que puso el usuario');
+    } finally { store.remove(a.id); }
+  });
+
+  await checkAsync('POST /api/accounts/token rechaza un token inválido sin crear nada', async () => {
+    const realFetch = global.fetch;
+    const server = require('./server').createServer(7998);
+    const before = store.list().length;
+    try {
+      await new Promise((r) => server.listen(7998, '127.0.0.1', r));
+      const post = async (body) => {
+        const res = await realFetch('http://127.0.0.1:7998/api/accounts/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Swaper': '1' },
+          body: JSON.stringify(body),
+        });
+        return { status: res.status, body: await res.json() };
+      };
+
+      // Forma inválida: se corta antes de salir a la red.
+      global.fetch = async () => { throw new Error('no debería llamarse'); };
+      assert.strictEqual((await post({ token: 'no-es-un-token' })).status, 400);
+
+      global.fetch = async () => ({
+        ok: false, status: 401, headers: { get: () => null },
+        text: async () => JSON.stringify({ error: { message: 'OAuth access token is invalid.' } }),
+      });
+      const rejected = await post({ token: FAKE_TOKEN });
+      assert.strictEqual(rejected.status, 401);
+      assert.ok(!JSON.stringify(rejected.body).includes(FAKE_TOKEN), 'el error no debe devolver el token');
+      assert.strictEqual(store.list().length, before, 'un token rechazado no debe dejar una cuenta a medias');
+    } finally {
+      global.fetch = realFetch;
+      await new Promise((r) => server.close(r));
+    }
+  });
+
+  await checkAsync('PATCH /api/accounts/:id renombra, y rechaza lo que no es un nombre', async () => {
+    const realFetch = global.fetch;
+    const server = require('./server').createServer(7997);
+    const blob = { accessToken: FAKE_TOKEN, refreshToken: null, expiresAt: Date.now() + 60000, scopes: ['user:inference'] };
+    const a = store.add({ label: null, email: null, profile: null, oauth: blob });
+    try {
+      await new Promise((r) => server.listen(7997, '127.0.0.1', r));
+      const patch = async (id, body) => {
+        const res = await realFetch(`http://127.0.0.1:7997/api/accounts/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Swaper': '1' },
+          body: JSON.stringify(body),
+        });
+        return { status: res.status, body: await res.json() };
+      };
+
+      const ok = await patch(a.id, { label: '  Trabajo  ' });
+      assert.strictEqual(ok.status, 200);
+      assert.strictEqual(store.get(a.id).label, 'Trabajo', 'debe recortar los espacios');
+      assert.strictEqual(ok.body.account.label, 'Trabajo');
+      // La respuesta viaja por publicAccount, así que sigue sin llevar el token.
+      assert.ok(!JSON.stringify(ok.body).includes('sk-ant-'), 'la respuesta del PATCH filtró un token');
+
+      // Un nombre en blanco no es un nombre: debe rechazarse, no borrar el que había.
+      assert.strictEqual((await patch(a.id, { label: '   ' })).status, 400);
+      assert.strictEqual(store.get(a.id).label, 'Trabajo', 'un nombre vacío no debe pisar el bueno');
+
+      assert.strictEqual((await patch('acc_nolaexiste', { label: 'X' })).status, 404);
+    } finally {
+      global.fetch = realFetch;
+      store.remove(a.id);
+      await new Promise((r) => server.close(r));
+    }
+  });
+
   console.log(failures === 0 ? '\nAll checks passed.\n' : `\n${failures} check(s) failed.\n`);
   process.exit(failures === 0 ? 0 : 1);
 })();

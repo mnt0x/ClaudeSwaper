@@ -99,6 +99,17 @@ function serveStatic(res, pathname) {
   });
 }
 
+/**
+ * Credentials that OUTRANK the file this app writes.
+ *
+ * Verified by pointing Claude Code at a local server and reading the headers it sent: with any of
+ * these set it never touches ~/.claude/.credentials.json, so every swap becomes a silent no-op —
+ * the panel reports success, the account changes on disk, and the CLI keeps using the variable.
+ * That failure is invisible from inside the app, which is exactly why it is worth naming.
+ */
+const OVERRIDING_ENV = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN'];
+const overridingEnv = () => OVERRIDING_ENV.filter((k) => process.env[k]);
+
 /** Turn a set of tokens into a stored account, using the live profile as the source of truth. */
 async function adoptTokens(tokenOauth, existingUserID) {
   const { email, profile } = await oauth.fetchProfile(tokenOauth.accessToken);
@@ -115,6 +126,7 @@ async function handleApi(req, res, url, port) {
       ok: true, claudeRunning: procs.running, pids: procs.pids, node: process.version,
       platform: process.platform,
       credentialsBackend: credentials.describeBackend(),
+      overridingEnv: overridingEnv(),
       paths: { claudeJson: P.claudeJsonPath(), data: P.dataDir() },
     });
   }
@@ -192,6 +204,76 @@ async function handleApi(req, res, url, port) {
       return send(res, 200, { ok: true, account: store.publicAccount(account.id, tgId) });
     } catch (err) {
       return fail(res, 502, `No se pudo verificar la cuenta actual: ${err.message}`);
+    }
+  }
+
+  /**
+   * Add an account by PASTING a long-lived token, with no login and nothing imported.
+   *
+   * `claude setup-token` mints a token that is valid for a year but carries only user:inference,
+   * so it can never tell us who it belongs to. probeToken sorts that out without spending
+   * inference and without touching the rate-limited usage endpoint:
+   *   403 + scope complaint -> a real setup-token. Stored with honest scopes; no usage meters.
+   *   200                   -> a full-scope token. We fetch the profile and it behaves like an
+   *                            imported account, except it can never be renewed.
+   *   401                   -> rejected, and nothing is written.
+   */
+  if (pathname === '/api/accounts/token' && method === 'POST') {
+    const body = await readBody(req);
+    const token = typeof body.token === 'string' ? body.token.trim() : '';
+    const label = typeof body.label === 'string' ? body.label.trim().slice(0, 60) : '';
+    if (!token) return fail(res, 400, 'Pega un token para añadir la cuenta');
+
+    try {
+      const probe = await oauth.probeToken(token);
+
+      let email = null;
+      let profile = null;
+      let scopes = oauth.INFERENCE_ONLY_SCOPES;
+      if (probe.kind === 'full') {
+        const who = await oauth.fetchProfile(token);
+        email = who.email;
+        profile = who.profile;
+        scopes = oauth.SCOPES;
+      }
+
+      // Pasting over an account that could renew itself is a real downgrade, and it happens
+      // silently inside store.add. Detect it BEFORE the write so the answer can say so.
+      const priorId = profile || email ? store.idFor(profile, email) : store.idForToken(token);
+      const prior = store.get(priorId);
+      const losesRenewal = !!(prior && prior.oauth && prior.oauth.refreshToken);
+
+      const account = store.add({
+        label: label || null,
+        email,
+        profile,
+        oauth: {
+          accessToken: token,
+          // Never '' — Claude Code reads an empty refreshToken as a dead-token sentinel.
+          refreshToken: null,
+          // Optimistic by construction: we stamp a year from NOW because the token itself does
+          // not say when it was minted. A token pasted late in its life will therefore look
+          // healthier than it is; the swap's own verification is what actually catches a dead
+          // one, by rolling back on a 401.
+          expiresAt: Date.now() + oauth.LONG_LIVED_MS,
+          refreshTokenExpiresAt: null,
+          scopes,
+          subscriptionType: null,
+          rateLimitTier: null,
+        },
+      });
+
+      const warnings = [];
+      if (probe.kind === 'inference') {
+        warnings.push('Token solo de inferencia: el swap funciona, pero esta cuenta no puede mostrar consumo.');
+      }
+      if (losesRenewal) {
+        warnings.push('Esta cuenta ya estaba guardada con un token renovable; el token pegado lo sustituye y ya no se renovará sola.');
+      }
+      return send(res, 200, { ok: true, kind: probe.kind, warnings, account: store.publicAccount(account.id) });
+    } catch (err) {
+      const status = err.malformed ? 400 : err.status === 401 ? 401 : 502;
+      return fail(res, status, err.message);
     }
   }
 
@@ -311,6 +393,11 @@ function listen(port) {
     console.log(`  datos: ${P.dataDir()}`);
     // Inherited from the shell, this silently redirects every read and write to a throwaway
     // config — and the README teaches people to set it for an isolated login.
+    const overriding = overridingEnv();
+    if (overriding.length) {
+      console.log(`  AVISO: ${overriding.join(', ')} está definido y GANA al fichero de credenciales.`);
+      console.log('         Mientras siga así, los swaps no tendrán efecto en Claude Code.');
+    }
     if (process.env.CLAUDE_CONFIG_DIR) {
       console.log(`  AVISO: CLAUDE_CONFIG_DIR está definido, se opera sobre ${P.claudeJsonPath()}`);
     }

@@ -118,7 +118,43 @@ Turn order is "least recently **attempted** first", not least recently succeeded
 success alone let a single account with a dead token sit at zero and win every sweep for ever,
 so the healthy accounts never got a reading at all.
 
-### Token lifetimes
+### Pasted long-lived tokens (`claude setup-token`)
+
+`claude setup-token` mints a token that lasts a year, and the panel accepts one by paste. Two
+properties of it drive most of the code around it, both read out of `claude.exe` v2.1.258 and
+confirmed against a live CLI:
+
+**It carries only `user:inference`.** The authorize URL is built as
+`inferenceOnly ? ["user:inference"] : <the five interactive-login scopes>`. So the token can run
+inference and nothing else: `/api/oauth/profile` and `/api/oauth/usage` both answer it **403**,
+permanently. That has three consequences. There is no email and no `accountUuid`, so
+`store.idForToken` derives the account id from a hash of the token itself — pasting the same
+token twice updates in place instead of creating a second row. There is no usage, so
+`store.canReadUsage` gates `usage.fetchFor` **before the cache**: a 403 is not a 429, nothing
+would absorb it, and the request would repeat every sweep and starve the accounts that can
+answer. And there is no profile to write, so the swap **deletes** `oauthAccount` from
+`~/.claude.json` rather than leaving the previous account's — Claude Code only reconciles that
+block against the token when the token carries `user:profile`, so a stale one just sits there
+naming the account you swapped away from.
+
+**It has no refresh token, and that is fine.** Claude Code's refresh routine returns early with
+`"not_needed"` when `expiresAt` is more than 5 minutes out and `"no_refresh_token"` otherwise —
+plain returns, never a throw — and the API client is then built with the access token anyway.
+Verified live: a credentials blob of `accessToken` + `expiresAt` + `scopes:["user:inference"]`
+runs a request and exits 0. Two shapes are NOT fine, and `swap.writeCredentials` guards both:
+`refreshToken: ""` is Claude Code's sentinel for "this token is dead, I already cleared it", so
+it writes `null`; and an empty or missing `scopes` array makes it print
+`Not logged in - Please run /login` and exit 1, so the array is never allowed to be empty.
+
+A pasted token is validated by `oauth.probeToken`, which asks `/api/oauth/profile` and reads the
+status: **200** is a full-scope token (it gets a profile and working meters), **403 with a scope
+complaint** is a genuine setup-token, and **401** is rejected. The 403 is a positive signal —
+Anthropic only checks scopes on a token it has already authenticated — which makes this a free
+validator. Proving the same thing with an inference call would cost money and still not say who
+the token belongs to. It deliberately does not probe `/api/oauth/usage`: that endpoint's budget
+is about five calls per five minutes for the whole app.
+
+### Token lifetimes (imported accounts)
 
 Access ~8 h, refresh ~29 days, rotating on every use. A background keep-alive renews anything
 with under a day of life left, every 6 hours. Because refreshing **invalidates the previous
@@ -193,7 +229,7 @@ only shape allowed to reach the browser; it strips `oauth` and `userID`.
 
 | Method | Path | Returns |
 |---|---|---|
-| GET | `/api/health` | `{ok, claudeRunning, pids, node, platform, credentialsBackend, paths}` |
+| GET | `/api/health` | `{ok, claudeRunning, pids, node, platform, credentialsBackend, overridingEnv, paths}` |
 | GET | `/api/targets` | `{targets:[{id, kind, label, activeId, running}]}` — host + each WSL distro |
 | GET | `/api/accounts?target=` | `{activeId, accounts:[...]}` for that target — token fields stripped |
 | GET | `/api/usage/all` | `{ "<id>": NormalizedUsage }`, sequential, failures isolated |
@@ -201,11 +237,19 @@ only shape allowed to reach the browser; it strips `oauth` and `userID`.
 | POST | `/api/swap` | `{id, target?}` -> `{ok, verified, target, warnings[], backup, account}` |
 | POST | `/api/swap/dryrun` | `{id, target?}` -> what would change, writes nothing |
 | POST | `/api/accounts/import` | `{configDir?, target?}` -> `{ok, account}` |
+| POST | `/api/accounts/token` | `{token, label?}` -> `{ok, kind, warnings[], account}` — paste a long-lived token |
 | PATCH | `/api/accounts/:id` | `{label?, color?}` |
 | DELETE | `/api/accounts/:id` | `{ok}` |
 
 `target` defaults to `host`. Usage is target-independent (the token is the same in any
 environment), so `/api/usage*` take no target.
+
+`overridingEnv` lists any of `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and
+`CLAUDE_CODE_OAUTH_TOKEN` that are set. Each of them outranks the credentials file this app
+writes — verified by pointing Claude Code at a logging proxy and reading the headers it sent —
+so while one is set every swap is a silent no-op: the panel reports success, the file changes,
+and the CLI keeps using the variable. It is reported because that failure is otherwise invisible
+from inside the app.
 
 NormalizedUsage:
 
@@ -213,6 +257,8 @@ NormalizedUsage:
       weekly:{...}, scoped:[{label,percent,resetsAt}], opus, extraUsage, locked,
       stale?, staleSince?, staleReason? }
     // failure: { id, ok:false, error, status, needsRelogin }
+    // inference-only: { id, ok:false, unsupported:true, error, status:0, needsRelogin:false }
+    //   — never fetched; see "Pasted long-lived tokens" for why asking would be actively harmful
 
 Guards: loopback bind, `Host` validated, cross-site `Origin` rejected, `X-Swaper: 1` required
 on **every `/api/` request, GET included**, static serving confined to `public/`. Anything

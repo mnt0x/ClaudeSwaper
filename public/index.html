@@ -29,6 +29,12 @@
     <g id="i-import" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M9 3v8m0 0 3-3m-3 3-3-3"/><path d="M3.5 12.5v1a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-1"/>
     </g>
+    <g id="i-key" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="5.8" cy="12.2" r="3"/><path d="M8 10 15 3"/><path d="M12.6 5.4l2 2"/><path d="M10.8 7.2l2 2"/>
+    </g>
+    <g id="i-edit" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.3 3.5a1.7 1.7 0 0 1 2.2 2.2L6.7 13.6l-3 .7.7-3 7.9-7.8Z"/>
+    </g>
     <g id="i-close" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
       <path d="M5 5l8 8M13 5l-8 8"/>
     </g>
@@ -50,6 +56,10 @@
 
   <div class="toolbar">
     <span class="sync" id="sync" aria-live="polite"></span>
+    <button class="btn btn-primary" id="btn-add-token" title="Añadir una cuenta pegando un token · T">
+      <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-key"/></svg>
+      <span>añadir token</span>
+    </button>
     <button class="btn" id="btn-refresh" title="Actualizar uso · R">
       <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-refresh"/></svg>
       <span>refresh</span>
@@ -78,6 +88,27 @@
   </p>
 </form>
 
+<!-- Alta por token de larga duracion (claude setup-token). Mismo patron inline que #dir-form:
+     se queda en la pagina, se puede estilar, y Escape devuelve el foco donde estaba. El campo
+     del token es type=password: no se teclea, se pega, y asi no queda a la vista de nadie que
+     mire la pantalla ni lo guarda el autocompletado. -->
+<form class="field-row" id="token-form" hidden>
+  <label for="token-input">Añadir una cuenta con un token de larga duración</label>
+  <div class="field-line">
+    <span class="field-prefix" aria-hidden="true">token</span>
+    <input type="password" id="token-input" name="token" spellcheck="false" autocomplete="off"
+           placeholder="pega aquí el token" aria-describedby="token-help">
+    <input type="text" id="token-label" name="label" spellcheck="false" autocomplete="off"
+           placeholder="nombre (opcional)" aria-label="Nombre para esta cuenta" maxlength="60">
+    <button class="btn btn-primary" type="submit">añadir</button>
+    <button class="btn" type="button" id="token-cancel">cancelar</button>
+  </div>
+  <p class="field-help" id="token-help">
+    Genéralo con <code>claude setup-token</code>: vale un año y no hace falta volver a entrar.
+    Solo da permiso de inferencia, así que esa cuenta cambiará bien pero no podrá mostrar consumo.
+  </p>
+</form>
+
 <main>
   <!-- Una sección por entorno (host, y cada WSL). Las rellena app.js con las MISMAS cuentas;
        cada sección marca la suya activa y su swap escribe en ese entorno. -->
@@ -86,15 +117,24 @@
   <section class="empty" id="empty" hidden>
     <h2>0 cuentas registradas</h2>
     <ol class="steps">
-      <li><span>Abre una terminal y ejecuta <code>claude</code>.</span></li>
-      <li><span>Escribe <code>/login</code> y entra con la cuenta que quieras añadir.</span></li>
-      <li><span>Sal con <code>/exit</code> y pulsa <strong>Importar cuenta</strong>.</span></li>
+      <li><span>Ejecuta <code>claude setup-token</code> en una terminal.</span></li>
+      <li><span>Apruébalo en el navegador y copia el token que imprime.</span></li>
+      <li><span>Pulsa <strong>Añadir token</strong> y pégalo aquí.</span></li>
     </ol>
-    <p class="footnote">Una vez por cuenta. A partir de ahí, cambiar es un clic.</p>
-    <button class="btn btn-primary" id="btn-import-empty">
-      <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-import"/></svg>
-      <span>import cuenta actual</span>
-    </button>
+    <p class="footnote">
+      Una vez por cuenta y dura un año. También puedes <strong>importar</strong> la sesión que ya
+      tengas abierta: esas cuentas sí muestran consumo, pero hay que entrar con cada una.
+    </p>
+    <div class="empty-actions">
+      <button class="btn btn-primary" id="btn-add-token-empty">
+        <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-key"/></svg>
+        <span>añadir token</span>
+      </button>
+      <button class="btn" id="btn-import-empty">
+        <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-import"/></svg>
+        <span>import cuenta actual</span>
+      </button>
+    </div>
   </section>
 </main>
 
@@ -130,6 +170,9 @@
     <div class="who">
       <span class="state-dot" aria-hidden="true"></span>
       <span class="name"></span>
+      <!-- Sits in the same grid cell as .name and swaps with it, so renaming happens where the
+           name already is instead of moving the row about. -->
+      <input class="name-edit" type="text" maxlength="60" spellcheck="false" autocomplete="off" hidden>
       <span class="mail"></span>
     </div>
 
@@ -157,6 +200,9 @@
         <span>swap</span>
       </button>
       <span class="badge-active">in use</span>
+      <button class="btn-icon btn-rename" title="Renombrar" aria-label="Renombrar">
+        <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-edit"/></svg>
+      </button>
       <button class="btn-icon btn-remove" title="Quitar del dashboard" aria-label="Quitar del dashboard">
         <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-close"/></svg>
       </button>

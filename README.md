@@ -1,9 +1,9 @@
 # ClaudeSwaper
 
 Panel local para gestionar varias cuentas de Claude y **cambiar la cuenta activa de Claude
-Code con un clic**, sin volver a hacer `claude` y `/login`. Guardas cada cuenta una vez y a
-partir de ahí saltas entre ellas al instante — en tu equipo y en tus entornos WSL, desde la
-misma pantalla.
+Code con un clic**, sin volver a hacer `claude` y `/login`. Pegas el token de cada cuenta una
+vez y a partir de ahí saltas entre ellas al instante — en tu equipo y en tus entornos WSL, desde
+la misma pantalla.
 
 Además te muestra, para cada cuenta, cuánto llevas gastado de la sesión de 5 horas y del límite
 semanal, con su cuenta atrás — para saber de un vistazo a cuál conviene saltar.
@@ -28,7 +28,7 @@ WSL · Ubuntu                                                                 [ 
 ## Requisitos
 
 - **Node 18 o superior** (usa `fetch` nativo).
-- Claude Code instalado y con al menos una sesión iniciada (para importar la primera cuenta).
+- Claude Code instalado (para generar los tokens con `claude setup-token`).
 
 No necesita permisos de administrador ni conexión a más servicios que la propia API de Claude.
 
@@ -52,17 +52,33 @@ otro puerto: `PORT=7400 node server.js`.
 
 ## Añadir una cuenta
 
-Cada cuenta se guarda una sola vez:
+Hay dos formas, y eligen por ti una cosa: si esa cuenta mostrará su consumo o no.
+
+### Pegando un token (recomendado)
+
+1. En una terminal: `claude setup-token`. Apruébalo en el navegador y copia el token que imprime.
+2. En el panel, pulsa **añadir token** (o la tecla `t`), pega el token y dale un nombre.
+
+Ese token vale **un año**. No caduca al reiniciar, no hay que renovarlo y no vuelves a entrar en
+esa cuenta en todo el año.
+
+El precio es concreto: `setup-token` genera un token con permiso **solo de inferencia**
+(`user:inference`). Sirve para usar Claude, pero Anthropic no le deja consultar el perfil ni el
+consumo, así que esas cuentas aparecen en el panel sin medidores y sin plan, marcadas como
+*solo inferencia*. El cambio de cuenta funciona igual de bien.
+
+### Importando la sesión activa
 
 1. Inicia sesión con esa cuenta en Claude Code (`claude`, luego `/login`).
-2. En el panel, pulsa **import**: ClaudeSwaper toma la cuenta con la que tienes sesión ahora,
-   verifica su token contra la API y la guarda.
+2. En el panel, pulsa **import**.
 
-A partir de ahí la cuenta aparece siempre en el panel y cambiar a ella es un clic. Reimportar la
-misma cuenta la actualiza en su sitio; no crea duplicados.
+Esa cuenta sí muestra consumo, plan y correo, porque su token tiene todos los permisos. A cambio
+hay que entrar con cada cuenta, y su token de refresco caduca a los ~29 días si no abres el panel.
 
 Para capturar una segunda cuenta sin cerrar la sesión que estás usando, inícialas en carpetas
 separadas con `CLAUDE_CONFIG_DIR` e impórtalas con **Mayús + clic** en **import** (host).
+
+En ambos casos, volver a añadir la misma cuenta la actualiza en su sitio; no crea duplicados.
 
 ---
 
@@ -97,10 +113,13 @@ Por dentro, cada swap:
 
 ## Por qué no vuelves a hacer login
 
-Los tokens de acceso de Claude duran unas 8 horas y el de refresco unos 29 días, rotando cada
-vez que se usan. Con el panel abierto, ClaudeSwaper renueva en segundo plano cualquier cuenta a
-la que le quede menos de un día de vida, de modo que mientras lo abras de vez en cuando tus
-cuentas no caducan y no tienes que volver a iniciar sesión.
+Con un token de `claude setup-token` la respuesta es simple: dura un año y no hay nada que
+renovar. Cuando se acabe, generas otro y lo pegas.
+
+Para las cuentas **importadas** el mecanismo es otro. Sus tokens de acceso duran unas 8 horas y
+el de refresco unos 29 días, rotando cada vez que se usan. Con el panel abierto, ClaudeSwaper
+renueva en segundo plano cualquier cuenta a la que le quede menos de un día de vida, de modo que
+mientras lo abras de vez en cuando tus cuentas no caducan.
 
 Si Claude Code renueva su propia sesión por su cuenta, el panel lo detecta al arrancar y adopta
 el par de tokens vigente, siempre que pueda confirmar de quién es — nunca escribe los tokens de
@@ -110,7 +129,12 @@ una cuenta en el registro de otra.
 
 ## Uso y límites
 
-El uso se lee del mismo sitio que `/usage` en Claude Code. Ese endpoint tiene una cuota baja, así
+Las cuentas añadidas con un token de `setup-token` no muestran consumo: su token solo tiene
+permiso de inferencia y Anthropic responde 403 a la consulta de uso. El panel no la intenta
+siquiera — gastaría, para nada, una de las pocas peticiones que caben en la ventana y dejaría sin
+datos a las cuentas que sí pueden responder.
+
+Para el resto, el uso se lee del mismo sitio que `/usage` en Claude Code. Ese endpoint tiene una cuota baja, así
 que ClaudeSwaper limita su propio ritmo de consultas y sirve valores en caché alrededor de ese
 tope; cuando no puede refrescar, muestra el último dato conocido marcado como *antiguo* en lugar
 de dejar la fila en blanco. El cambio de cuenta funciona siempre, independientemente de esto.
@@ -131,8 +155,13 @@ las copias están ahí como red adicional.
   de modo que ninguna web abierta en el navegador puede darle órdenes.
 - Los tokens viven en `data/`, con permisos restringidos al usuario, y **nunca** salen del panel:
   la vista que llega al navegador no incluye ningún token.
-- No hay login OAuth dentro del panel: importar la sesión existente es más simple y no expone
-  credenciales a un flujo web.
+- No hay login OAuth dentro del panel. Los tokens los genera `claude setup-token` en tu terminal
+  y tú los pegas; el panel nunca conduce un flujo de autorización ni abre sesión por ti.
+- Un token pegado es un secreto de un año, más duradero que los ~8 h de un token importado.
+  Trátalo como tal: el campo del panel es de tipo contraseña y se vacía al cerrarlo.
+- Si tienes definida `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` o `CLAUDE_CODE_OAUTH_TOKEN`,
+  **Claude Code las prefiere al fichero de credenciales** y los cambios de cuenta no tendrán
+  efecto. El panel lo detecta y lo avisa al arrancar y en `/api/health`.
 
 ---
 

@@ -210,7 +210,23 @@ code {
   border-radius: var(--r-sm); cursor: pointer;
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
-.btn-icon:hover { color: var(--crit); background: rgba(255, 92, 114, 0.1); }
+.btn-remove:hover { color: var(--crit); background: rgba(255, 92, 114, 0.1); }
+.btn-rename:hover { color: var(--phos); background: rgba(0, 255, 156, 0.1); }
+
+/* Ocupa la MISMA celda que .name (columna 2, fila 1) para que al intercambiarse no se mueva
+   nada de la fila; .mail cae sola a la fila 2, como hacia antes bajo el nombre. */
+.name-edit {
+  grid-column: 2; grid-row: 1;
+  min-width: 0; max-width: 15rem;
+  font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.01em;
+  color: var(--text);
+  caret-color: var(--phos);
+  background: var(--bg);
+  border: 1px solid var(--phos);
+  border-radius: var(--r-sm);
+  padding: 0.08rem 0.32rem;
+}
+.name-edit:focus-visible { outline-offset: 1px; }
 
 /* Loading is a state, so it reads as one: the icon turns, nothing else moves. */
 .is-loading .ico { animation: spin 800ms linear infinite; }
@@ -483,6 +499,11 @@ main { max-width: 1180px; margin: 0 auto; }
   border-radius: var(--r-sm);
   padding: 0.42rem 0.6rem;
 }
+/* El nombre es opcional y corto: no debe competir por el ancho con el token, que es largo. */
+#token-label { flex: 0 1 11rem; min-width: 7rem; }
+/* flex-start, no center: todo lo demas dentro de .empty (h2, .steps, .footnote) va alineado a
+   la izquierda, y centrar solo los botones rompia el margen izquierdo de la tarjeta. */
+.empty-actions { display: flex; gap: 0.5rem; justify-content: flex-start; flex-wrap: wrap; }
 .field-line input::placeholder { color: var(--text-3); }
 .field-line input:focus-visible { border-color: var(--phos); outline-offset: 1px; }
 
