@@ -129,10 +129,10 @@ confirmed against a live CLI:
 inference and nothing else: `/api/oauth/profile` and `/api/oauth/usage` both answer it **403**,
 permanently. That has three consequences. There is no email and no `accountUuid`, so
 `store.idForToken` derives the account id from a hash of the token itself — pasting the same
-token twice updates in place instead of creating a second row. There is no usage, so
-`store.canReadUsage` gates `usage.fetchFor` **before the cache**: a 403 is not a 429, nothing
-would absorb it, and the request would repeat every sweep and starve the accounts that can
-answer. And there is no profile to write, so the swap **deletes** `oauthAccount` from
+token twice updates in place instead of creating a second row. Usage cannot come from the usage
+endpoint, so `store.canReadUsage` routes these accounts to the header probe below instead: a 403
+is not a 429, nothing would absorb it, and the request would repeat every sweep and starve the
+accounts that can answer. And there is no profile to write, so the swap **deletes** `oauthAccount` from
 `~/.claude.json` rather than leaving the previous account's — Claude Code only reconciles that
 block against the token when the token carries `user:profile`, so a stale one just sits there
 naming the account you swapped away from.
@@ -153,6 +153,37 @@ Anthropic only checks scopes on a token it has already authenticated — which m
 validator. Proving the same thing with an inference call would cost money and still not say who
 the token belongs to. It deliberately does not probe `/api/oauth/usage`: that endpoint's budget
 is about five calls per five minutes for the whole app.
+
+### Quota from the rate-limit headers
+
+An inference-only token still has quota, and Anthropic reports it on every `/v1/messages`
+response in the `anthropic-ratelimit-unified-*` headers, which do not care about scopes because
+the call IS inference. Measured, endpoint by endpoint, before settling on that one:
+
+    POST /v1/messages/count_tokens   200, no rate-limit headers
+    GET  /v1/models                  200, no rate-limit headers
+    POST /v1/messages                200, and the full set
+
+The free ones say nothing, so something has to be spent. The floor is Haiku, `max_tokens: 1` and
+a one-character prompt: **8 input tokens and 1 output token** per probe. That is not zero —
+unlike the usage endpoint, which costs nothing at all — and it is the user's own subscription
+being spent, so it is stated in the README rather than hidden. At one probe per account every
+five minutes it is about 2,600 tokens a day against a window measured in hundreds of thousands.
+
+`usage.readUnifiedHeaders` translates the header names (`5h`, `7d`) into the ones the rest of the
+project speaks (`session`, `weekly`), turns a `utilization` fraction into a percentage and a
+`reset` in epoch seconds into an ISO timestamp, and `normalizeProbe` emits the exact shape
+`normalize` produces — so nothing downstream, the UI included, can tell the two sources apart
+beyond the `viaProbe` flag.
+
+The probe does NOT share `MIN_GAP_MS`. That floor exists for the usage endpoint's budget of about
+five calls per five minutes; making probe accounts queue behind it would have the two kinds of
+account fighting over four slots for no reason, since they are different endpoints with different
+limits. It keeps its own 2-second gap so a sweep goes out as a trickle rather than a burst.
+
+A 401 or 403 on a probe means the credential is **dead**, not exhausted. Those are different
+things and only one of them is fixed by waiting — conflating them is what makes a panel bench a
+perfectly good account for an hour and a half with its five-hour window at 0%.
 
 ### Token lifetimes (imported accounts)
 
@@ -257,8 +288,8 @@ NormalizedUsage:
       weekly:{...}, scoped:[{label,percent,resetsAt}], opus, extraUsage, locked,
       stale?, staleSince?, staleReason? }
     // failure: { id, ok:false, error, status, needsRelogin }
-    // inference-only: { id, ok:false, unsupported:true, error, status:0, needsRelogin:false }
-    //   — never fetched; see "Pasted long-lived tokens" for why asking would be actively harmful
+    // from the header probe: the same shape plus viaProbe:true, scoped:[] and opus/extraUsage null
+    //   — see "Quota from the rate-limit headers"
 
 Guards: loopback bind, `Host` validated, cross-site `Origin` rejected, `X-Swaper: 1` required
 on **every `/api/` request, GET included**, static serving confined to `public/`. Anything

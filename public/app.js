@@ -1,9 +1,13 @@
 // ClaudeSwaper frontend. No framework, no CDN, no build.
 
-// The usage endpoint allows roughly 5 requests per 5 minutes for the WHOLE app, so the
-// server enforces a hard gap between outbound calls and serves cache around it. Polling
-// often would just pile up throttled requests, so it does not.
-const POLL_MS = 10 * 60 * 1000;
+// The usage endpoint allows roughly 5 requests per 5 minutes for the WHOLE app. What actually
+// bounds our request rate is the server-side floor (MIN_GAP_MS, 80s between ANY two outbound
+// calls), NOT this interval — a poll that arrives sooner than the floor is just served cache or a
+// "queued" marker, never another request. So polling every 5 minutes is safe: it asks the server
+// for fresh numbers more often, and the server hands back what the floor lets it fetch. Reading
+// usage costs no tokens and does not touch the 5h/weekly quota, so there is nothing to save by
+// polling less. Refresh (the button) forces past the cache; the background poll does not.
+const POLL_MS = 5 * 60 * 1000;
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -125,11 +129,6 @@ function renderSkeletons(n = 2) {
 
 function noteFor(usage) {
   if (!usage) return null;
-  // A token that only does inference can NEVER report usage. That is a permanent property of the
-  // account, not an incident, so it is stated once and quietly in the plan column. Repeating it
-  // as a warning row-note on every render would teach the eye to skip row-notes, and the next
-  // real one — a locked account, a dead token — would be skipped with it.
-  if (usage.unsupported) return null;
   if (usage.ok) {
     if (usage.locked) return { tone: 'warn', text: `Bloqueado: ${usage.locked}` };
     if (usage.stale) {
@@ -153,14 +152,16 @@ function buildRow(account, target) {
 
   node.dataset.id = account.id;
   node.classList.toggle('is-active', isActive);
-  if (usage && !usage.ok && !usage.unsupported) {
+  if (usage && !usage.ok) {
     node.classList.add(usage.needsRelogin ? 'is-error' : 'is-waiting');
   }
 
   $('.name', node).textContent = account.label;
   $('.mail', node).textContent = account.email || '';
   // planLabel returns null rather than guessing "Claude" for an account we never identified.
-  // Saying what the token IS explains the empty meters next to it without a second line.
+  // The label describes the TOKEN, not a missing feature: such an account does show meters, but
+  // they arrive from the rate-limit headers of a probe rather than from the usage endpoint, and
+  // its plan is genuinely unknown because the profile endpoint will not answer it.
   $('.plan', node).textContent = account.plan || (account.canReadUsage ? '' : 'solo inferencia');
 
   const usable = usage && usage.ok ? usage : null;

@@ -689,18 +689,81 @@ async function checkAsync(name, fn) {
     } finally { global.fetch = realFetch; }
   });
 
-  await checkAsync('una cuenta de solo inferencia NUNCA consulta el endpoint de uso', async () => {
+  // Cabeceras como las que devuelve /v1/messages, para las sondas de cuota.
+  const cabeceras = (map) => ({ get: (k) => (k.toLowerCase() in map ? map[k.toLowerCase()] : null) });
+  const RESET_5H = Math.floor(Date.now() / 1000) + 3600;
+  const RESET_7D = Math.floor(Date.now() / 1000) + 86400;
+  const CABECERAS_OK = {
+    'anthropic-ratelimit-unified-status': 'allowed',
+    'anthropic-ratelimit-unified-representative-claim': '5h',
+    'anthropic-ratelimit-unified-5h-utilization': '0.42',
+    'anthropic-ratelimit-unified-5h-reset': String(RESET_5H),
+    'anthropic-ratelimit-unified-7d-utilization': '0.87',
+    'anthropic-ratelimit-unified-7d-reset': String(RESET_7D),
+  };
+
+  await checkAsync('una cuenta de solo inferencia saca la cuota de las cabeceras, sin tocar el endpoint de uso', async () => {
     const realFetch = global.fetch;
-    let called = false;
+    const urls = [];
     try {
       usage.invalidate(); usage.resetCooldown();
-      global.fetch = async () => { called = true; throw new Error('no debería llamarse'); };
+      global.fetch = async (url) => {
+        urls.push(String(url));
+        return { ok: true, status: 200, headers: cabeceras(CABECERAS_OK), text: async () => '{}' };
+      };
       const r = await usage.fetchFor({ id: 'inf1', oauth: { accessToken: 't', scopes: ['user:inference'] } });
-      // Ese endpoint responde 403 permanente a este token, y el cupo es de ~5 peticiones por
-      // 5 minutos para TODA la app. Gastarlo aquí dejaría sin datos a las cuentas que sí pueden.
-      assert.strictEqual(called, false, 'un 403 garantizado no debe gastar el presupuesto compartido');
-      assert.strictEqual(r.unsupported, true);
-      assert.strictEqual(r.needsRelogin, false, 'no es un problema de sesión: no debe pedir re-login');
+
+      // Lo que NO puede pasar: /api/oauth/usage responde 403 permanente a este token, y el cupo
+      // es de ~5 peticiones por 5 minutos para TODA la app. Gastarlo ahí sería un fallo seguro
+      // que además deja sin datos a las cuentas que sí pueden responder.
+      assert.ok(!urls.some((u) => u.includes('/api/oauth/usage')), 'no debe tocar el endpoint de uso');
+      assert.ok(urls.some((u) => u === usage.PROBE_URL), 'debe sondear /v1/messages');
+
+      assert.strictEqual(r.ok, true);
+      assert.strictEqual(r.viaProbe, true, 'debe marcar de dónde salió el número');
+      // utilization llega como fracción (0.42) y sale como porcentaje.
+      assert.strictEqual(r.session.percent, 42);
+      assert.strictEqual(r.weekly.percent, 87);
+      assert.strictEqual(r.weekly.severity, 'high');
+      // reset llega en segundos epoch y sale en ISO, que es lo que sabe leer la cuenta atrás.
+      assert.strictEqual(r.session.resetsAt, new Date(RESET_5H * 1000).toISOString());
+    } finally { global.fetch = realFetch; usage.invalidate(); usage.resetCooldown(); }
+  });
+
+  await checkAsync('la sonda envía lo mínimo: Haiku, max_tokens 1 y un carácter', async () => {
+    const realFetch = global.fetch;
+    let enviado = null;
+    let cabecerasEnviadas = null;
+    try {
+      usage.invalidate(); usage.resetCooldown();
+      global.fetch = async (url, opts) => {
+        enviado = JSON.parse(opts.body);
+        cabecerasEnviadas = opts.headers;
+        return { ok: true, status: 200, headers: cabeceras(CABECERAS_OK), text: async () => '{}' };
+      };
+      await usage.fetchFor({ id: 'inf2', oauth: { accessToken: 'tok', scopes: ['user:inference'] } });
+      // Los endpoints gratuitos (count_tokens, /v1/models) no traen cabeceras de límite, así que
+      // hay que gastar algo. Esto es el suelo medido: 8 tokens de entrada y 1 de salida.
+      assert.strictEqual(enviado.model, usage.PROBE_MODEL);
+      assert.strictEqual(enviado.max_tokens, 1);
+      assert.strictEqual(enviado.messages[0].content, '.');
+      assert.strictEqual(cabecerasEnviadas['anthropic-beta'], 'oauth-2025-04-20',
+        'un token OAuth de suscripción necesita esta beta');
+    } finally { global.fetch = realFetch; usage.invalidate(); usage.resetCooldown(); }
+  });
+
+  await checkAsync('un token rechazado en la sonda es una credencial muerta, no una cuenta sin cuota', async () => {
+    const realFetch = global.fetch;
+    try {
+      usage.invalidate(); usage.resetCooldown();
+      global.fetch = async () => ({ ok: false, status: 401, headers: cabeceras({}), text: async () => 'nope' });
+      const r = await usage.fetchFor({ id: 'inf3', oauth: { accessToken: 't', scopes: ['user:inference'] } });
+      // Confundir las dos cosas es el fallo que el panel del servidor documentaba: una cuenta
+      // apartada hora y media por "cuota" teniendo la ventana al 0%.
+      assert.strictEqual(r.ok, false);
+      assert.strictEqual(r.needsRelogin, true);
+      assert.strictEqual(r.session, undefined, 'una credencial muerta no debe traer medidores inventados');
+      assert.ok(!JSON.stringify(r).includes('sk-ant-'), 'el error no debe llevar el token');
     } finally { global.fetch = realFetch; usage.invalidate(); usage.resetCooldown(); }
   });
 

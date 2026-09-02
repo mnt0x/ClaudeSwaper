@@ -62,10 +62,15 @@ Hay dos formas, y eligen por ti una cosa: si esa cuenta mostrará su consumo o n
 Ese token vale **un año**. No caduca al reiniciar, no hay que renovarlo y no vuelves a entrar en
 esa cuenta en todo el año.
 
-El precio es concreto: `setup-token` genera un token con permiso **solo de inferencia**
-(`user:inference`). Sirve para usar Claude, pero Anthropic no le deja consultar el perfil ni el
-consumo, así que esas cuentas aparecen en el panel sin medidores y sin plan, marcadas como
-*solo inferencia*. El cambio de cuenta funciona igual de bien.
+`setup-token` genera un token con permiso **solo de inferencia** (`user:inference`). Anthropic no
+le deja consultar el perfil, así que de esas cuentas no se sabe el correo ni el plan, y aparecen
+marcadas como *solo inferencia*.
+
+El consumo **sí** se ve, por otra vía: en vez del endpoint de uso (que rechaza este token), los
+porcentajes se leen de las cabeceras `anthropic-ratelimit-unified-*` que Anthropic devuelve en
+cualquier respuesta de inferencia. Eso obliga a gastar una llamada mínima — Haiku, `max_tokens: 1`
+y un prompt de un carácter: **8 tokens de entrada y 1 de salida** por sonda. Ver el detalle en
+*Uso y límites*.
 
 ### Importando la sesión activa
 
@@ -129,12 +134,23 @@ una cuenta en el registro de otra.
 
 ## Uso y límites
 
-Las cuentas añadidas con un token de `setup-token` no muestran consumo: su token solo tiene
-permiso de inferencia y Anthropic responde 403 a la consulta de uso. El panel no la intenta
-siquiera — gastaría, para nada, una de las pocas peticiones que caben en la ventana y dejaría sin
-datos a las cuentas que sí pueden responder.
+El consumo se refresca **cada 5 minutos** solo, y al pulsar **refresh**. De dónde salen los
+números depende del token, y el coste con él:
 
-Para el resto, el uso se lee del mismo sitio que `/usage` en Claude Code. Ese endpoint tiene una cuota baja, así
+**Cuentas importadas (token de scope completo).** Se leen del mismo sitio que `/usage` en Claude
+Code: `/api/oauth/usage`. **Cuesta cero tokens** — es un endpoint de estado, no de inferencia, y
+consultar tu cuota no consume tu cuota.
+
+**Cuentas de `setup-token` (solo inferencia).** Ese endpoint las rechaza con 403 para siempre, así
+que el panel ni lo intenta: gastaría una de las pocas peticiones que caben en la ventana en un
+fallo seguro, y dejaría sin datos a las cuentas que sí responden. Los números salen de las
+cabeceras `anthropic-ratelimit-unified-*` de una llamada de inferencia mínima. Medido endpoint por
+endpoint, `count_tokens` y `/v1/models` no traen esas cabeceras, así que hay que gastar algo; el
+suelo es Haiku con `max_tokens: 1` y un prompt de un carácter: **8 tokens de entrada y 1 de
+salida**. A una sonda cada 5 minutos son unos 2.600 tokens al día por cuenta, contra una ventana
+de cinco horas que se mide en cientos de miles. Es real, pero es ruido.
+
+Ese endpoint tiene una cuota baja, así
 que ClaudeSwaper limita su propio ritmo de consultas y sirve valores en caché alrededor de ese
 tope; cuando no puede refrescar, muestra el último dato conocido marcado como *antiguo* en lugar
 de dejar la fila en blanco. El cambio de cuenta funciona siempre, independientemente de esto.
