@@ -1,7 +1,7 @@
 'use strict';
 // One runnable check for the whole project: `node test.js`.
 // Runs each module's own self-check, then asserts the cross-module invariants that
-// matter — no token ever leaves the process, and the swap never eats a config key.
+// matter - no token ever leaves the process, and the swap never eats a config key.
 const assert = require('node:assert');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -33,7 +33,7 @@ const swapLib = require('./lib/swap');
 const oauth = require('./lib/oauth');
 
 // The usage cache is written to disk, so without this the suite would trample the real
-// data/usage-cache.json — including, now that it is persisted, the rate-limit cooldown.
+// data/usage-cache.json - including, now that it is persisted, the rate-limit cooldown.
 const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-data-'));
 P.dataDir = () => SANDBOX;
 P.backupsDir = () => path.join(SANDBOX, 'backups');
@@ -132,7 +132,7 @@ check('swap refuses to touch a config it cannot parse', () => {
 check('credentials round-trip through the file backend', () => {
   // CLAUDE_CONFIG_DIR redirects paths.credentialsPath(), so this never touches the
   // real credentials. On macOS the Keychain path is preferred but falls back to the
-  // file when no Keychain item exists — which is exactly this situation.
+  // file when no Keychain item exists - which is exactly this situation.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-cred-'));
   const previous = process.env.CLAUDE_CONFIG_DIR;
   process.env.CLAUDE_CONFIG_DIR = tmp;
@@ -170,7 +170,7 @@ check('credentials round-trip through the file backend', () => {
 
 check('the macOS branch degrades to the file backend instead of crashing', () => {
   // Forces the darwin path on whatever this really is. Where `security` does not exist
-  // (or holds no item) the Keychain read must fail soft and fall back to the file —
+  // (or holds no item) the Keychain read must fail soft and fall back to the file -
   // this is the closest thing to macOS coverage without a Mac.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-darwin-'));
   const realPlatform = process.platform;
@@ -283,7 +283,7 @@ check('el store adopta el par que Claude Code rotó por su cuenta, y solo si sab
 
 check('un swap a un target de fichero (WSL) escribe en SUS ficheros, no en los del host', () => {
   // Un target WSL es exactamente esto: fileBackend + dos rutas propias. Simulado con un
-  // directorio temporal — misma mecánica que las rutas UNC \\wsl.localhost\... reales.
+  // directorio temporal - misma mecánica que las rutas UNC \\wsl.localhost\... reales.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-wsl-'));
   const target = {
     id: 'wsl:test', kind: 'wsl', label: 'WSL · test',
@@ -580,7 +580,7 @@ async function checkAsync(name, fn) {
   await checkAsync('the rate floor caps outbound calls no matter how hard the UI pushes', async () => {
     // Measured against the live endpoint: the 5th rapid request returns 429 with
     // Retry-After 300, escalating on repeat. So the floor, not the poll interval, is
-    // what has to hold — a user mashing refresh must not be able to spend the budget.
+    // what has to hold - a user mashing refresh must not be able to spend the budget.
     const accounts = [1, 2, 3, 4].map((n) => ({ id: `gap${n}`, oauth: { accessToken: 't' } }));
     const realFetch = global.fetch;
     let calls = 0;
@@ -925,7 +925,7 @@ async function checkAsync(name, fn) {
       await new Promise((r) => server.listen(7996, '127.0.0.1', r));
       // http.request y no fetch: Host es un "forbidden header name", así que fetch lo ignora en
       // silencio y el test pasaría sin haber probado nada. Esto lo descubrió el propio test
-      // fallando al revés — pedía un 403 y recibía un 200 porque su Host nunca salió.
+      // fallando al revés - pedía un 403 y recibía un 200 porque su Host nunca salió.
       const http = require('node:http');
       const pedir = (headers) => new Promise((resolve, reject) => {
         const req = http.request({

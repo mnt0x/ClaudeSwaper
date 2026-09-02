@@ -2,7 +2,7 @@
 
 // The usage endpoint allows roughly 5 requests per 5 minutes for the WHOLE app. What actually
 // bounds our request rate is the server-side floor (MIN_GAP_MS, 80s between ANY two outbound
-// calls), NOT this interval — a poll that arrives sooner than the floor is just served cache or a
+// calls), NOT this interval - a poll that arrives sooner than the floor is just served cache or a
 // "queued" marker, never another request. So polling every 5 minutes is safe: it asks the server
 // for fresh numbers more often, and the server hands back what the floor lets it fetch. Reading
 // usage costs no tokens and does not touch the 5h/weekly quota, so there is nothing to save by
@@ -19,13 +19,24 @@ let accounts = [];
 let usageById = {};
 let lastFetch = 0;
 let swapping = false;
-// AbortController of the inline row interaction currently open — a "¿quitar?" confirmation or a
-// rename — if any. Also doubles as "this row is mid-conversation with the user", which the
+// AbortController of the inline row interaction currently open - a "¿quitar?" confirmation or a
+// rename - if any. Also doubles as "this row is mid-conversation with the user", which the
 // keyboard shortcuts must not talk over and which render() aborts before replacing the node.
 let openConfirm = null;
 // Environments shown at once, from /api/targets: [{id,label,kind,activeId,running}]. The
 // account list is shared; each section marks its own active account and swaps into it.
 let targetList = [{ id: 'host', label: 'host', kind: 'host', activeId: null, running: false }];
+// Which environment's tab is open. Survives a reload because losing it on every refresh would
+// mean re-picking your WSL distro all day; falls back to the host when the remembered one is
+// gone (a distro stopped, or WSL removed).
+let selectedTarget = (() => {
+  try { return localStorage.getItem('swaper.target') || 'host'; } catch { return 'host'; }
+})();
+function selectTarget(id) {
+  selectedTarget = id;
+  try { localStorage.setItem('swaper.target', id); } catch { /* private window: not worth failing over */ }
+  render();
+}
 
 /* ---------------- transport ---------------- */
 
@@ -88,7 +99,7 @@ function syncLabel(ms) {
 function fillMeter(meterEl, data, extra) {
   const known = !!data;
   meterEl.dataset.sev = known ? data.severity : 'unknown';
-  $('.value', meterEl).textContent = known ? `${data.percent}%` : '—';
+  $('.value', meterEl).textContent = known ? `${data.percent}%` : '-';
   const fill = $('.fill', meterEl);
   // scaleX rather than width: the compositor handles it and no layout is triggered.
   // Next frame, so the transition actually plays on first paint.
@@ -209,19 +220,45 @@ function sortedFor(target) {
   });
 }
 
-// One section per environment: a titled header (host / WSL · <distro>) with its own import,
-// and the shared accounts marked and swappable FOR THAT ENVIRONMENT.
+/**
+ * The tab strip. One per environment, in the order the server reports them - host first, then
+ * each WSL distro - so the row does not reshuffle between polls.
+ *
+ * A dot marks an environment with Claude Code open. It used to be a sentence next to every
+ * section title saying the change lands on new sessions; as a permanent label it was noise, and
+ * the swap already says exactly that, once, in the toast that follows it.
+ */
+function buildTabs() {
+  const bar = $('#tabs');
+  bar.innerHTML = '';
+  bar.hidden = targetList.length < 2;
+
+  for (const target of targetList) {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'tab';
+    tab.setAttribute('role', 'tab');
+    tab.dataset.target = target.id;
+    tab.setAttribute('aria-selected', String(target.id === selectedTarget));
+    tab.textContent = target.label;
+
+    if (target.running) {
+      const dot = document.createElement('span');
+      dot.className = 'tab-run';
+      dot.setAttribute('aria-hidden', 'true');
+      tab.append(dot);
+      tab.title = `Claude Code está abierto en ${target.label}`;
+    }
+
+    tab.addEventListener('click', () => selectTarget(target.id));
+    bar.append(tab);
+  }
+}
+
+// The panel for ONE environment: the shared accounts, marked and swappable for that one.
 function buildSection(target) {
   const node = tplEnv.content.firstElementChild.cloneNode(true);
   node.dataset.target = target.id;
-  $('.env-name', node).textContent = target.label;
-
-  if (target.running) {
-    $('.env-run', node).hidden = false;
-    const note = $('.env-note', node);
-    note.hidden = false;
-    note.textContent = 'Claude Code abierto — el cambio va a sesiones nuevas';
-  }
 
   // Import the account currently logged into THIS environment. Shift-click on the host
   // uses an isolated login dir; WSL has no such concept, so it just imports normally.
@@ -242,24 +279,33 @@ function render() {
   envsEl.hidden = !has;
   envsEl.setAttribute('aria-busy', 'false');
   // Every row is about to be replaced, so an open confirmation is answering about a node
-  // that will not exist — drop it and its document-level listeners with it.
+  // that will not exist - drop it and its document-level listeners with it.
   if (openConfirm) { openConfirm.abort(); openConfirm = null; }
   envsEl.innerHTML = '';
 
-  if (has) for (const target of targetList) envsEl.append(buildSection(target));
+  if (has) {
+    // A remembered distro can disappear between reloads; falling back keeps the panel usable
+    // instead of rendering nothing at all.
+    const target = targetList.find((t) => t.id === selectedTarget) || targetList[0];
+    selectedTarget = target.id;
+    buildTabs();
+    envsEl.append(buildSection(target));
+  } else {
+    $('#tabs').hidden = true;
+  }
   $('#sync').textContent = syncLabel(lastFetch);
 }
 
 /* ---------------- actions ---------------- */
 
 /**
- * Destructive, so it asks — inline, in the row itself. A native confirm() cannot be
+ * Destructive, so it asks - inline, in the row itself. A native confirm() cannot be
  * styled, blocks the whole page, and reads as a browser artefact rather than part of
  * the tool. Escape or a click elsewhere backs out.
  *
  * One AbortController owns all four listeners, so closing by ANY route drops them all.
  * {once:true} only fires-and-forgets: closing with Escape left the yes/no handlers
- * attached, and re-opening on the same row stacked another pair — one click on "sí" then
+ * attached, and re-opening on the same row stacked another pair - one click on "sí" then
  * sent two DELETEs, the second answering 404, so the user saw a success toast and an
  * error toast for the same removal. It also outlives the row: render() wipes rowsEl, and
  * the document-level listeners would keep pointing at a detached node.
@@ -307,12 +353,12 @@ function armRemoval(node, account) {
 }
 
 /**
- * Rename in place, in the row itself — the same reasoning as the removal confirmation below it:
+ * Rename in place, in the row itself - the same reasoning as the removal confirmation below it:
  * a modal would steal focus from the whole page to edit one word.
  *
  * Enter commits, Escape cancels, and losing focus commits too, because a click elsewhere after
  * typing a new name reads as "done", not as "discard what I just wrote". One AbortController owns
- * every listener, so closing by ANY of those routes drops them all — the bug the removal
+ * every listener, so closing by ANY of those routes drops them all - the bug the removal
  * confirmation documents in detail, and it applies here for exactly the same reason.
  */
 function armRename(node, account) {
@@ -484,8 +530,8 @@ async function refresh(force = false) {
 /**
  * Two things only the server can know, asked once at boot rather than on every poll: whether it
  * is running inside a container (where it cannot see host processes or WSL distros) and whether
- * an environment variable outranks the credentials file. The second is the nastier one — every
- * swap then reports success and changes nothing that Claude Code will read — and it is invisible
+ * an environment variable outranks the credentials file. The second is the nastier one - every
+ * swap then reports success and changes nothing that Claude Code will read - and it is invisible
  * from the panel unless it is said out loud.
  */
 async function reportEnvironment() {

@@ -1,17 +1,17 @@
-# ClaudeSwaper — imagen única para hosts Linux, macOS y Windows.
+# ClaudeSwaper - imagen única para hosts Linux, macOS y Windows.
 #
 # El contenedor es SIEMPRE Linux; lo que cambia según el host es qué se puede montar y qué deja
 # de funcionar. Está documentado en el README, y el propio panel lo dice en pantalla en vez de
 # fingir que todo va bien: dentro de un contenedor no se ven los procesos del host (así que no
 # puede saber si Claude Code está abierto) ni existe wsl.exe (así que no hay targets de WSL).
 #
-# node:22-alpine es multiarquitectura, así que la misma receta produce amd64 y arm64 — esto
+# node:22-alpine es multiarquitectura, así que la misma receta produce amd64 y arm64 - esto
 # último importa: sin arm64 la imagen correría emulada en los Mac con Apple Silicon.
 # Publicar ambas:  docker buildx build --platform linux/amd64,linux/arm64 -t claudeswaper .
 FROM node:22-alpine
 
 # Cero dependencias: no hay npm install, ni build, ni capa de node_modules que cachear.
-# Por eso no hay multi-stage — no habría nada que dejar fuera de la segunda etapa.
+# Por eso no hay multi-stage - no habría nada que dejar fuera de la segunda etapa.
 WORKDIR /app
 
 COPY package.json ./
@@ -46,7 +46,7 @@ USER node
 
 EXPOSE 7373
 
-# La API exige su propia cabecera en TODA petición, /api/health incluido — de ahí el --header.
+# La API exige su propia cabecera en TODA petición, /api/health incluido - de ahí el --header.
 HEALTHCHECK --interval=60s --timeout=5s --start-period=5s --retries=3 \
   CMD wget -q -O- --header='X-Swaper: 1' "http://127.0.0.1:${PORT}/api/health" >/dev/null || exit 1
 

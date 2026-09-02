@@ -1,5 +1,5 @@
-# data/ guarda tokens OAuth vivos de cuentas de pago. Que acabe dentro de una imagen — que se
-# comparte, se sube a un registro y se queda en el historial de capas — es la peor forma de
+# data/ guarda tokens OAuth vivos de cuentas de pago. Que acabe dentro de una imagen - que se
+# comparte, se sube a un registro y se queda en el historial de capas - es la peor forma de
 # filtrarlos. Primera línea del fichero por ese motivo.
 data/
 

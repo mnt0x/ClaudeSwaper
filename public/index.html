@@ -126,8 +126,11 @@
 </form>
 
 <main>
-  <!-- Una sección por entorno (host, y cada WSL). Las rellena app.js con las MISMAS cuentas;
-       cada sección marca la suya activa y su swap escribe en ese entorno. -->
+  <!-- Un entorno a la vez, elegido con pestañas: el host (Windows, macOS o Linux) y cada distro
+       de WSL. Las cuentas son LAS MISMAS en todas; lo que cambia por entorno es cuál está activa
+       y en qué ficheros escribe el swap. Antes se apilaban todas las secciones, que con tres
+       entornos obligaba a bajar para ver la última. -->
+  <div class="tabs" id="tabs" role="tablist" aria-label="Entorno" hidden></div>
   <div id="envs" aria-busy="true"></div>
 
   <section class="empty" id="empty" hidden>
@@ -159,9 +162,6 @@
 <template id="tpl-env">
   <section class="env">
     <div class="env-head">
-      <span class="env-name"></span>
-      <span class="env-run" aria-hidden="true" hidden></span>
-      <span class="env-note" hidden></span>
       <button class="btn btn-import-env" type="button"
               title="Guarda la cuenta con la que tienes sesión ahora en este entorno · Mayús+clic para una carpeta CLAUDE_CONFIG_DIR">
         <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-import"/></svg>

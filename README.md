@@ -2,7 +2,7 @@
 
 # ClaudeSwaper
 
-**Switch the active Claude Code account with one click — and see how much of each account's quota is left before you do.**
+**Switch the active Claude Code account with one click - and see how much of each account's quota is left before you do.**
 
 [![test](https://github.com/monac-cc/ClaudeSwaper/actions/workflows/test.yml/badge.svg)](https://github.com/monac-cc/ClaudeSwaper/actions/workflows/test.yml)
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
@@ -51,7 +51,7 @@ Claude Code holds one account at a time. Using a second one means `claude`, `/lo
 round trip, every time. If you have a personal account and a work one, that is a tax you pay all
 day.
 
-ClaudeSwaper stores each account once and makes the change a click — on your machine and inside
+ClaudeSwaper stores each account once and makes the change a click - on your machine and inside
 your WSL distros, from the same screen. It also shows what each account has left of its 5-hour
 session window and its weekly window, so the question it actually answers is *which account should
 I switch to right now*.
@@ -77,7 +77,7 @@ It opens <http://127.0.0.1:7373>. Another port:
 PORT=7400 node server.js
 ```
 
-The port is fixed on purpose — it does not hop to the next free one. The rate floor that keeps
+The port is fixed on purpose - it does not hop to the next free one. The rate floor that keeps
 this app inside the usage endpoint's budget is enforced **per process**, so a second instance
 would double the outbound rate and rate-limit both. If the port is taken it says so and exits.
 
@@ -85,7 +85,7 @@ would double the outbound rate and rate-limit both. If the port is taken it says
 
 Two ways in, and the choice decides one thing: whether the account can identify itself.
 
-### Paste a long-lived token — recommended
+### Paste a long-lived token - recommended
 
 ```bash
 claude setup-token
@@ -96,11 +96,11 @@ the `t` key), paste it and give it a name. **It lasts a year.** No renewal, no l
 
 `setup-token` grants a single OAuth scope, `user:inference`, so Anthropic will not let it read the
 profile endpoint. That account therefore has no identity of its own and shows the name you gave it.
-Its **quota meters still work** — they come from a different source, see below.
+Its **quota meters still work** - they come from a different source, see below.
 
 There is no way around this, and the panel does not pretend otherwise. The profile endpoint is the
 only thing that knows an account's plan, email and organisation, and it answers an inference-only
-token `403`. The inference response carries no plan or tier header either — the panel reads the
+token `403`. The inference response carries no plan or tier header either - the panel reads the
 quota straight off its rate-limit headers, and those are the only account facts on offer. So the
 panel shows no plan column at all rather than an empty one, and the name you give an account is
 what identifies it, in the list and in Claude Code's own `/status`.
@@ -108,7 +108,7 @@ what identifies it, in the list and in Claude Code's own `/status`.
 ### Import a live session
 
 Sign in with the account in Claude Code (`claude`, then `/login`), then press **import**. Those
-accounts carry the full scope set, so they identify themselves — email and organisation — and read
+accounts carry the full scope set, so they identify themselves - email and organisation - and read
 their quota from the usage endpoint at no token cost. The price is logging in once per account, and
 a refresh token that dies after ~29 days of not opening the panel.
 
@@ -132,7 +132,7 @@ token, and so does what they cost you:
 | Pasted `setup-token` | `anthropic-ratelimit-unified-*` response headers | **8 in + 1 out** |
 
 The usage endpoint answers an inference-only token `403` forever, so for those accounts the panel
-never calls it — spending one of the app's ~5 requests per 5 minutes on a guaranteed failure would
+never calls it - spending one of the app's ~5 requests per 5 minutes on a guaranteed failure would
 starve the accounts that *can* answer. Instead it reads the quota off the rate-limit headers that
 come back on any inference call. The free endpoints (`count_tokens`, `/v1/models`) carry no such
 headers, so something has to be spent: the floor is Haiku with `max_tokens: 1` and a
@@ -146,11 +146,11 @@ row. Switching accounts works regardless.
 
 Press **swap**. In order, it:
 
-1. Warns if Claude Code is open — the change lands on **new** sessions, not the running one.
+1. Warns if Claude Code is open - the change lands on **new** sessions, not the running one.
 2. Backs up the credentials and `~/.claude.json` to `data/backups/` (last 20 kept).
 3. Refreshes the token first if it is about to expire.
 4. Rewrites **only** `claudeAiOauth` in the credentials and `oauthAccount` in `~/.claude.json`.
-   Everything else — `mcpOAuth`, your projects, history, MCP servers — is left untouched.
+   Everything else - `mcpOAuth`, your projects, history, MCP servers - is left untouched.
 5. Verifies the new token against the API, and **rolls both files back** if anything fails.
 
 Each environment (host, and each WSL distro) tracks its own active account and has its own
@@ -158,7 +158,7 @@ Each environment (host, and each WSL distro) tracks its own active account and h
 
 ## Docker
 
-The image is Linux and runs anywhere Docker does — including Apple Silicon, since `node:22-alpine`
+The image is Linux and runs anywhere Docker does - including Apple Silicon, since `node:22-alpine`
 is multi-arch. What changes per host is what you mount and what stops working.
 
 ```bash
@@ -182,7 +182,7 @@ has no choice, so the loopback guarantee has to be imposed on the host side. Dro
 `127.0.0.1:` prefix puts a panel that handles paid credentials on every interface of your machine.
 
 **Mount the same `data/` you already use.** A named volume gives the container a separate, empty
-store — right for a server that only ever runs Docker, baffling on a machine where you already
+store - right for a server that only ever runs Docker, baffling on a machine where you already
 added accounts.
 
 **Do not run the container and `node server.js` at the same time.** The rate floor is per process;
@@ -202,8 +202,8 @@ What a container cannot do, on any host:
 |---|---|
 | Panel, meters, quota probe, adding accounts | works |
 | Swapping the host's credentials | works, if you mounted `~/.claude` |
-| Telling whether Claude Code is running | **no** — it sees only the container's processes |
-| WSL targets | **no** — `wsl.exe` does not exist inside |
+| Telling whether Claude Code is running | **no** - it sees only the container's processes |
+| WSL targets | **no** - `wsl.exe` does not exist inside |
 
 The panel says both of those on screen instead of reporting "not running" for something it simply
 cannot see.
@@ -228,12 +228,12 @@ cannot see.
   credentials file.** While any of them is set, switching is a silent no-op: the panel reports
   success, the file changes, and Claude Code keeps using the variable. The panel detects this and
   says so, in the UI and in `/api/health`.
-- **Accounts added by token cannot be resolved to an identity** — no email, no plan, no
+- **Accounts added by token cannot be resolved to an identity** - no email, no plan, no
   organisation. The profile endpoint rejects such a token and the inference response carries no
   tier header, so there is nothing to read. The panel shows the name you gave it and invents
   nothing. Name an account with its real email and `/status` reads as it always did.
 - **Remote Control does not work with `setup-token` accounts.** Anthropic documents it: such a
-  token "can only make model requests". Claude Code then prints `Remote Control disconnected —
+  token "can only make model requests". Claude Code then prints `Remote Control disconnected -
   /login`, which reads like a login prompt but is not: the session itself is authenticated.
   Silence it with `"disableRemoteControl": true` in `~/.claude/settings.json`.
 - **The usage endpoint is rate-limited** to roughly 5 requests per 5 minutes for the whole app.
@@ -244,10 +244,10 @@ cannot see.
 | Symptom | Cause |
 |---|---|
 | Switching "works" but Claude Code keeps the old account | An overriding environment variable. See [Limitations](#limitations). |
-| `Remote Control disconnected — /login` | Expected with `setup-token` accounts. Not a broken session. |
+| `Remote Control disconnected - /login` | Expected with `setup-token` accounts. Not a broken session. |
 | `Not logged in - Please run /login` | The credentials blob has no `scopes`. Never write it empty. |
 | Meters empty and marked stale | Rate-limited. It recovers on its own; switching is unaffected. |
-| `Ya hay algo escuchando en…` on start-up | Another instance. Deliberate — the port never hops. |
+| `Ya hay algo escuchando en…` on start-up | Another instance. Deliberate - the port never hops. |
 
 ## Development
 
@@ -256,8 +256,8 @@ node test.js        # 49 checks, ~2 s, no external network
 ```
 
 The suite stubs every `fetch`, so a run never spends the usage endpoint's budget. Each module also
-has its own self-check (`node lib/swap.js`). Internals — the endpoints, the token model, the swap
-and its rollback — are documented in [ARCHITECTURE.md](ARCHITECTURE.md).
+has its own self-check (`node lib/swap.js`). Internals - the endpoints, the token model, the swap
+and its rollback - are documented in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 

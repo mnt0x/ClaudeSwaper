@@ -19,7 +19,7 @@ const targets = require('./lib/targets');
 const HOST = '127.0.0.1';
 // Where the socket actually binds. Loopback everywhere except inside a container, where the
 // Dockerfile sets 0.0.0.0. The loopback guarantee then moves outward, to how the port is
-// published:  -p 127.0.0.1:7373:7373  — see the README.
+// published:  -p 127.0.0.1:7373:7373  - see the README.
 const BIND = process.env.SWAPER_BIND || HOST;
 const BASE_PORT = Number(process.env.PORT) || 7373;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -81,7 +81,7 @@ function readBody(req) {
 //
 // Dropping it costs nothing, because the port was never what defended anything. The attack this
 // guards against is DNS rebinding: a page on evil.com whose domain resolves to 127.0.0.1, so the
-// browser really does connect to this socket. What gives it away is the Host header — it says
+// browser really does connect to this socket. What gives it away is the Host header - it says
 // "evil.com", because the browser fills it from the URL the page used. A hostname check catches
 // that; the port never entered into it. An ordinary cross-origin fetch is stopped twice over,
 // by the Origin check below and by the X-Swaper header a cross-site request cannot set.
@@ -135,7 +135,7 @@ function serveStatic(res, pathname) {
  * Credentials that OUTRANK the file this app writes.
  *
  * Verified by pointing Claude Code at a local server and reading the headers it sent: with any of
- * these set it never touches ~/.claude/.credentials.json, so every swap becomes a silent no-op —
+ * these set it never touches ~/.claude/.credentials.json, so every swap becomes a silent no-op -
  * the panel reports success, the account changes on disk, and the CLI keeps using the variable.
  * That failure is invisible from inside the app, which is exactly why it is worth naming.
  */
@@ -286,7 +286,7 @@ async function handleApi(req, res, url, port) {
         profile,
         oauth: {
           accessToken: token,
-          // Never '' — Claude Code reads an empty refreshToken as a dead-token sentinel.
+          // Never '' - Claude Code reads an empty refreshToken as a dead-token sentinel.
           refreshToken: null,
           // Optimistic by construction: we stamp a year from NOW because the token itself does
           // not say when it was minted. A token pasted late in its life will therefore look
@@ -338,7 +338,7 @@ async function handleApi(req, res, url, port) {
 
 /**
  * The whole point of this app is never logging in again. Access tokens last ~8h and
- * refresh tokens ~29 days, rotating on each use — so an account left untouched for a
+ * refresh tokens ~29 days, rotating on each use - so an account left untouched for a
  * month would die and need a real login. This keeps every stored account alive in the
  * background, whether or not you ever swap to it.
  * Uses the token endpoint, NOT the rate-limited usage endpoint.
@@ -364,13 +364,13 @@ async function keepTokensAlive() {
       store.update(account.id, { oauth: fresh });
       // Refreshing ROTATES the refresh token and kills the old one, so the live session
       // may now be holding a dead token. syncLiveCredentials decides whether it is this
-      // account's session to update, and writes through the credentials BACKEND — on
+      // account's session to update, and writes through the credentials BACKEND - on
       // macOS that is the Keychain, and a path-based write would land in a file Claude
       // Code never reads, leaving it with the dead token for real.
       const synced = swap.syncLiveCredentials(o.refreshToken, fresh);
       console.log(`  token renovado: ${account.email}${synced ? ' (y sincronizado con Claude Code)' : ''}`);
     } catch (err) {
-      // Do not delete anything — a transient network failure must not cost an account.
+      // Do not delete anything - a transient network failure must not cost an account.
       // invalid_grant is the one case that is not transient and that the user can act on:
       // something rotated this account's tokens outside the store (Claude Code renews its
       // own session too), so the stored refresh token is dead and only a re-import fixes it.
@@ -382,7 +382,7 @@ async function keepTokensAlive() {
   }
 }
 
-// store.list() reads accounts.json, which can throw on a corrupt or briefly locked file —
+// store.list() reads accounts.json, which can throw on a corrupt or briefly locked file -
 // outside the try above, and in a promise nobody awaits. Unhandled, that kills the process
 // and with it the only thing keeping the stored accounts from expiring.
 const keepAliveTick = () => keepTokensAlive().catch((err) => {
@@ -416,7 +416,7 @@ function listen(port) {
     // running on 7374 would double the outbound rate and rate-limit both of them.
     if (err.code === 'EADDRINUSE') {
       const url = `http://${HOST}:${port}`;
-      console.log(`\n  Ya hay algo escuchando en ${url} — probablemente otro ClaudeSwaper.`);
+      console.log(`\n  Ya hay algo escuchando en ${url} - probablemente otro ClaudeSwaper.`);
       console.log(`  Ábrelo ahí, o arranca en otro puerto:  PORT=7400 node server.js\n`);
       if (!process.env.NO_OPEN) oauth.openBrowser(url);
       process.exit(0);
@@ -429,7 +429,7 @@ function listen(port) {
     console.log(`\n  ClaudeSwaper  ->  ${url}`);
     console.log(`  datos: ${P.dataDir()}`);
     // Inherited from the shell, this silently redirects every read and write to a throwaway
-    // config — and the README teaches people to set it for an isolated login.
+    // config - and the README teaches people to set it for an isolated login.
     if (P.inContainer()) {
       console.log('  contenedor: sin detección de procesos ni targets WSL (frontera del contenedor)');
     }

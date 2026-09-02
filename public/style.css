@@ -1,4 +1,4 @@
-/* ClaudeSwaper — instrumento de terminal, monocromo fosforo.
+/* ClaudeSwaper - instrumento de terminal, monocromo fosforo.
    Un solo color de marca: el verde #00ff9c. El unico segundo lenguaje de color es la rampa
    de severidad (ambar -> naranja -> rojo) que solo aparece cuando una barra se llena: el
    color de una barra ES su estado, se lee de un vistazo. Fondo: una malla verde animada. */
@@ -259,20 +259,61 @@ main { max-width: 1180px; margin: 0 auto; }
 
 .env-head {
   display: flex; align-items: center; gap: 0.6rem;
-  padding: 0 0.15rem 0.55rem;
+  padding: 0.55rem 0.15rem 0.55rem;
 }
-/* El titulillo del entorno: pequeño, en versalitas de fósforo. */
-.env-name {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+/* ---------- pestañas de entorno ----------
+   Una fila arriba a la izquierda, justo encima del panel: Windows / macOS / Linux y cada distro
+   de WSL. La seleccionada se apoya en el borde superior del panel - sin borde inferior propio y
+   con el mismo fondo - para que se lea como la lengüeta de una carpeta y no como un botón suelto
+   que resulta que además está pulsado. */
+.tabs {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex; align-items: flex-end; gap: 0.25rem;
+  padding: 0 0.15rem;
+  /* Se solapa con el panel: los 2px se los come su borde, que es lo que une la lengüeta. */
+  margin-bottom: -1px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  position: relative;
+  display: flex; align-items: center; gap: 0.4rem;
+  flex: none;
+  font: inherit;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  padding: 0.42rem 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.tab:hover { color: var(--text-2); }
+
+.tab[aria-selected="true"] {
   color: var(--phos);
+  background: var(--surface-1);
+  border-color: var(--line-strong);
 }
-.env-run {
+/* Tapa el borde del panel bajo la pestaña activa, que es lo que la "abre" hacia el contenido. */
+.tab[aria-selected="true"]::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: var(--surface-1);
+}
+.tab:focus-visible { outline: 2px solid var(--phos); outline-offset: -2px; }
+
+/* Claude Code abierto en ese entorno. Un punto, no una frase: el aviso de que el cambio va a
+   sesiones nuevas ya lo da el swap en su toast, una vez, cuando de verdad importa. */
+.tab-run {
   width: 6px; height: 6px; border-radius: 50%; flex: none;
   background: var(--warn); box-shadow: 0 0 7px rgba(255, 204, 77, 0.7);
-}
-.env-note {
-  font-size: 11px; color: #e6d9a8;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 /* El import de cada entorno se va a la derecha de su cabecera. */
 .btn-import-env { margin-left: auto; }

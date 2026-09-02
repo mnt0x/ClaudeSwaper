@@ -1,4 +1,4 @@
-# ClaudeSwaper — internals
+# ClaudeSwaper - internals
 
 Notes on how Claude Code stores its session, and what ClaudeSwaper does with it.
 Everything here was verified empirically against a live installation, not inferred.
@@ -24,7 +24,7 @@ Zero dependencies. Node >= 18 (global `fetch`). No build step.
         "expiresAt": 0, "refreshTokenExpiresAt": 0,
         "scopes": [], "subscriptionType": "max", "rateLimitTier": "default_claude_max_20x" } }
 
-`~/.claude.json` is large (~130 KB) and holds dozens of unrelated keys — `projects`,
+`~/.claude.json` is large (~130 KB) and holds dozens of unrelated keys - `projects`,
 `mcpServers`, plugin state, onboarding flags. Only `oauthAccount` is ours to touch:
 
     "oauthAccount": { accountUuid, emailAddress, organizationUuid, hasExtraUsageEnabled,
@@ -33,8 +33,8 @@ Zero dependencies. Node >= 18 (global `fetch`). No build step.
       profileFetchedAt, organizationRole, workspaceRole, organizationName, organizationType,
       organizationRateLimitTier, userRateLimitTier }
 
-**`userID` is deliberately never written.** It does not derive from `accountUuid` — five hash
-hypotheses were tested and none matched — so it is an install/telemetry identifier, not an
+**`userID` is deliberately never written.** It does not derive from `accountUuid` - five hash
+hypotheses were tested and none matched - so it is an install/telemetry identifier, not an
 account one. Leaving it alone removes a whole class of risk.
 
 `~/.claude.json` can go **stale** relative to the tokens: switching accounts by hand updates
@@ -66,7 +66,7 @@ Scopes: `user:inference user:profile user:sessions:claude_code user:mcp_servers 
 > it actually processed the request. Probed with a deliberately invalid token to avoid
 > rotating a real one.
 
-> There is no in-app OAuth login. The client only accepts its own registered redirect URIs —
+> There is no in-app OAuth login. The client only accepts its own registered redirect URIs -
 > a loopback `http://127.0.0.1:PORT/callback` is rejected with *"Redirect URI ... is not
 > supported by client"*. Importing an existing session is simpler and always works.
 
@@ -97,7 +97,7 @@ app, however many accounts are configured.
 
 Tuning the poll frequency cannot hold that, because a sweep of N accounts costs N requests. So
 the primary mechanism is a **hard floor of 80 s between any two outbound calls** (`MIN_GAP_MS`,
-`lib/usage.js`), which nothing bypasses — not the refresh button, not a second browser tab.
+`lib/usage.js`), which nothing bypasses - not the refresh button, not a second browser tab.
 The number that matters is not the average rate but how many calls fit in the endpoint's 300 s
 window: with a gap of `g` that is `floor(300/g) + 1`, so `g` must satisfy `4g >= 300`. At 70 s
 it was exactly five, i.e. the app rate-limited itself.
@@ -109,7 +109,7 @@ forgot them walked straight back into the block and reset the escalation.
 
 Bookkeeping lives in `fetchRaw`, not `fetchFor`: the swap verifies a new token by calling
 `fetchRaw` directly, and an uncounted call is exactly the amplification that trips the limit.
-`fetchRaw` still never blocks — verifying a token has to work mid-cooldown — it just is not free.
+`fetchRaw` still never blocks - verifying a token has to work mid-cooldown - it just is not free.
 
 When the API cannot be reached, the last known-good reading is served as `stale` rather than
 blanking the UI. A 401/403 is surfaced as a real error, since the token is dead.
@@ -128,18 +128,18 @@ confirmed against a live CLI:
 `inferenceOnly ? ["user:inference"] : <the five interactive-login scopes>`. So the token can run
 inference and nothing else: `/api/oauth/profile` and `/api/oauth/usage` both answer it **403**,
 permanently. That has three consequences. There is no email and no `accountUuid`, so
-`store.idForToken` derives the account id from a hash of the token itself — pasting the same
+`store.idForToken` derives the account id from a hash of the token itself - pasting the same
 token twice updates in place instead of creating a second row. Usage cannot come from the usage
 endpoint, so `store.canReadUsage` routes these accounts to the header probe below instead: a 403
 is not a 429, nothing would absorb it, and the request would repeat every sweep and starve the
 accounts that can answer. And there is no profile to write, so the swap **deletes** `oauthAccount` from
-`~/.claude.json` rather than leaving the previous account's — Claude Code only reconciles that
+`~/.claude.json` rather than leaving the previous account's - Claude Code only reconciles that
 block against the token when the token carries `user:profile`, so a stale one just sits there
 naming the account you swapped away from.
 
 **It has no refresh token, and that is fine.** Claude Code's refresh routine returns early with
-`"not_needed"` when `expiresAt` is more than 5 minutes out and `"no_refresh_token"` otherwise —
-plain returns, never a throw — and the API client is then built with the access token anyway.
+`"not_needed"` when `expiresAt` is more than 5 minutes out and `"no_refresh_token"` otherwise -
+plain returns, never a throw - and the API client is then built with the access token anyway.
 Verified live: a credentials blob of `accessToken` + `expiresAt` + `scopes:["user:inference"]`
 runs a request and exits 0. Two shapes are NOT fine, and `swap.writeCredentials` guards both:
 `refreshToken: ""` is Claude Code's sentinel for "this token is dead, I already cleared it", so
@@ -148,8 +148,8 @@ it writes `null`; and an empty or missing `scopes` array makes it print
 
 A pasted token is validated by `oauth.probeToken`, which asks `/api/oauth/profile` and reads the
 status: **200** is a full-scope token (it gets a profile and working meters), **403 with a scope
-complaint** is a genuine setup-token, and **401** is rejected. The 403 is a positive signal —
-Anthropic only checks scopes on a token it has already authenticated — which makes this a free
+complaint** is a genuine setup-token, and **401** is rejected. The 403 is a positive signal -
+Anthropic only checks scopes on a token it has already authenticated - which makes this a free
 validator. Proving the same thing with an inference call would cost money and still not say who
 the token belongs to. It deliberately does not probe `/api/oauth/usage`: that endpoint's budget
 is about five calls per five minutes for the whole app.
@@ -165,15 +165,15 @@ the call IS inference. Measured, endpoint by endpoint, before settling on that o
     POST /v1/messages                200, and the full set
 
 The free ones say nothing, so something has to be spent. The floor is Haiku, `max_tokens: 1` and
-a one-character prompt: **8 input tokens and 1 output token** per probe. That is not zero —
-unlike the usage endpoint, which costs nothing at all — and it is the user's own subscription
+a one-character prompt: **8 input tokens and 1 output token** per probe. That is not zero -
+unlike the usage endpoint, which costs nothing at all - and it is the user's own subscription
 being spent, so it is stated in the README rather than hidden. At one probe per account every
 five minutes it is about 2,600 tokens a day against a window measured in hundreds of thousands.
 
 `usage.readUnifiedHeaders` translates the header names (`5h`, `7d`) into the ones the rest of the
 project speaks (`session`, `weekly`), turns a `utilization` fraction into a percentage and a
 `reset` in epoch seconds into an ISO timestamp, and `normalizeProbe` emits the exact shape
-`normalize` produces — so nothing downstream, the UI included, can tell the two sources apart
+`normalize` produces - so nothing downstream, the UI included, can tell the two sources apart
 beyond the `viaProbe` flag.
 
 The probe does NOT share `MIN_GAP_MS`. That floor exists for the usage endpoint's budget of about
@@ -182,7 +182,7 @@ account fighting over four slots for no reason, since they are different endpoin
 limits. It keeps its own 2-second gap so a sweep goes out as a trickle rather than a burst.
 
 A 401 or 403 on a probe means the credential is **dead**, not exhausted. Those are different
-things and only one of them is fixed by waiting — conflating them is what makes a panel bench a
+things and only one of them is fixed by waiting - conflating them is what makes a panel bench a
 perfectly good account for an hour and a half with its five-hour window at 0%.
 
 ### Token lifetimes (imported accounts)
@@ -190,24 +190,24 @@ perfectly good account for an hour and a half with its five-hour window at 0%.
 Access ~8 h, refresh ~29 days, rotating on every use. A background keep-alive renews anything
 with under a day of life left, every 6 hours. Because refreshing **invalidates the previous
 refresh token**, renewing the account whose session is live also writes the new pair into the
-live credentials — otherwise Claude Code would be left holding a dead token.
+live credentials - otherwise Claude Code would be left holding a dead token.
 
 Rotation runs in both directions, and the inbound one is what actually bites: **Claude Code
 renews its own session**, so the live pair moves on and the store's copy is left holding a token
 Anthropic has already killed. Nothing surfaces that until the keep-alive tries it, by which
-point the account needs a real login — the one thing this app exists to avoid.
+point the account needs a real login - the one thing this app exists to avoid.
 
 So before renewing anything, `swap.adoptLiveTokens` checks whether the live refresh token still
 matches the active account's, and adopts the live pair when it does not. Tokens carry no
 identity, so it only adopts when `oauthAccount` in `~/.claude.json` and our own `activeId` name
 the same account: agreement means the identity never changed and only the pair moved. On any
-disagreement it does nothing — writing one account's tokens into another's record is far worse
+disagreement it does nothing - writing one account's tokens into another's record is far worse
 than asking for an import.
 
 "Whose session is live" is decided by comparing the pre-refresh refresh token against the one
 in the credentials, not by `activeId`. `activeId` cannot answer it: a swap writes the new
 credentials and only calls `setActive()` at the very end, after a network round trip, so for
-seconds at a time the two disagree by design — and a manual `claude /login` changes the live
+seconds at a time the two disagree by design - and a manual `claude /login` changes the live
 session without telling the store at all. The write goes through the credentials **backend**,
 so on macOS it lands in the Keychain rather than in a file Claude Code never reads.
 
@@ -252,27 +252,27 @@ step the volume is root-owned, the process runs as `node`, and start-up dies wit
 
 A **target** is where a swap writes. `lib/targets.js` enumerates them:
 
-- `host` — the machine the server runs on, through its credentials backend (Keychain on
+- `host` - the machine the server runs on, through its credentials backend (Keychain on
   macOS, file elsewhere).
-- `wsl:<distro>` — a WSL distro that has Claude installed, reached over its file share:
+- `wsl:<distro>` - a WSL distro that has Claude installed, reached over its file share:
   `\\wsl.localhost\<distro>\home\<user>\.claude.json` and `…\.claude\.credentials.json`.
   WSL is Linux, so it is always the plain-file backend. Detection runs `wsl.exe -l -q`,
   reads each distro's `$HOME`, and includes it only if `~/.claude.json` is reachable over
-  the share — which simultaneously proves the distro is running and that Claude lives there.
+  the share - which simultaneously proves the distro is running and that Claude lives there.
   Detection is cached ~30s (it spawns several `wsl.exe` calls) and only happens on Windows.
 
 The OAuth tokens are identical in every environment, so the **account store is shared**;
 what differs per target is which account is *active* (`store.active` is a map keyed by
 target id, migrated from the old single `activeId`) and which files a swap rewrites. A swap
-is otherwise byte-for-byte the same operation — backup, in-place mutation, verify, roll
-back — pointed at the target's two paths. `wsl.exe` is addressed absolutely from
+is otherwise byte-for-byte the same operation - backup, in-place mutation, verify, roll
+back - pointed at the target's two paths. `wsl.exe` is addressed absolutely from
 `%SystemRoot%\System32` (falling back to `Sysnative`) because it is not always on the PATH
 a spawned Node process sees.
 
 A target's active account is read from the store; if we have never swapped there, it is
 detected live from that environment's `oauthAccount.accountUuid`, so a freshly-opened WSL
 shows its real current account as "in use" without a write. Windows-side writes over the
-share cannot carry Linux `0600` bits — the files stay inside the WSL user's own home, which
+share cannot carry Linux `0600` bits - the files stay inside the WSL user's own home, which
 is already user-scoped.
 
 ---
@@ -291,19 +291,19 @@ only shape allowed to reach the browser; it strips `oauth` and `userID`.
 
 ---
 
-## HTTP API — 127.0.0.1 only
+## HTTP API - 127.0.0.1 only
 
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/api/health` | `{ok, claudeRunning, pids, node, platform, credentialsBackend, overridingEnv, paths}` |
-| GET | `/api/targets` | `{targets:[{id, kind, label, activeId, running}]}` — host + each WSL distro |
-| GET | `/api/accounts?target=` | `{activeId, accounts:[...]}` for that target — token fields stripped |
+| GET | `/api/targets` | `{targets:[{id, kind, label, activeId, running}]}` - host + each WSL distro |
+| GET | `/api/accounts?target=` | `{activeId, accounts:[...]}` for that target - token fields stripped |
 | GET | `/api/usage/all` | `{ "<id>": NormalizedUsage }`, sequential, failures isolated |
 | GET | `/api/usage?id=` | `NormalizedUsage` |
 | POST | `/api/swap` | `{id, target?}` -> `{ok, verified, target, warnings[], backup, account}` |
 | POST | `/api/swap/dryrun` | `{id, target?}` -> what would change, writes nothing |
 | POST | `/api/accounts/import` | `{configDir?, target?}` -> `{ok, account}` |
-| POST | `/api/accounts/token` | `{token, label?}` -> `{ok, kind, warnings[], account}` — paste a long-lived token |
+| POST | `/api/accounts/token` | `{token, label?}` -> `{ok, kind, warnings[], account}` - paste a long-lived token |
 | PATCH | `/api/accounts/:id` | `{label?, color?}` |
 | DELETE | `/api/accounts/:id` | `{ok}` |
 
@@ -312,7 +312,7 @@ environment), so `/api/usage*` take no target.
 
 `overridingEnv` lists any of `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and
 `CLAUDE_CODE_OAUTH_TOKEN` that are set. Each of them outranks the credentials file this app
-writes — verified by pointing Claude Code at a logging proxy and reading the headers it sent —
+writes - verified by pointing Claude Code at a logging proxy and reading the headers it sent -
 so while one is set every swap is a silent no-op: the panel reports success, the file changes,
 and the CLI keeps using the variable. It is reported because that failure is otherwise invisible
 from inside the app.
@@ -324,13 +324,13 @@ NormalizedUsage:
       stale?, staleSince?, staleReason? }
     // failure: { id, ok:false, error, status, needsRelogin }
     // from the header probe: the same shape plus viaProbe:true, scoped:[] and opus/extraUsage null
-    //   — see "Quota from the rate-limit headers"
+    //   - see "Quota from the rate-limit headers"
 
 Guards: loopback bind, `Host` validated, cross-site `Origin` rejected, `X-Swaper: 1` required
 on **every `/api/` request, GET included**, static serving confined to `public/`. Anything
 matching `sk-ant-[A-Za-z0-9_-]+` is scrubbed before it can reach a log or a response body.
 
-The `Host` check validates the **hostname only** — `127.0.0.1`, `localhost`, `::1` — and
+The `Host` check validates the **hostname only** - `127.0.0.1`, `localhost`, `::1` - and
 deliberately ignores the port. A container listens on 7373 and is published as whatever the user
 chose, so the browser sends the *published* port, which this process cannot know; pinning it
 rejected every containerised request with "Host no permitido". Nothing is lost by dropping it,
@@ -342,7 +342,7 @@ fills it from the URL the page used. An ordinary cross-origin fetch is stopped t
 
 GET is not exempt because read-only is not the same as harmless: `/api/health` spawns a process
 per call and `/api/usage` spends the app's whole request budget for the window, and neither an
-`<img>` nor a cross-site form can set a custom header. Static assets stay exempt — the browser
+`<img>` nor a cross-site form can set a custom header. Static assets stay exempt - the browser
 loads `/style.css` with no say in its headers.
 
 The port is fixed. `EADDRINUSE` reports the running instance and exits rather than hopping to
@@ -353,7 +353,7 @@ outbound rate and rate-limit both.
 
 ## The swap
 
-1. Detect running Claude processes — warn, never block.
+1. Detect running Claude processes - warn, never block.
 2. Back up credentials and `~/.claude.json` to `data/backups/<ts>/`. Backup failure aborts.
 3. Refresh the token if it expires within 5 minutes.
 4. Replace **only** `claudeAiOauth`; `mcpOAuth` and everything else survives.
@@ -362,12 +362,12 @@ outbound rate and rate-limit both.
    passesEligibilityCache, cachedExtraUsageDisabledReason, hasAvailableSubscription,
    clientDataCacheSlots, additionalModelOptionsCache, additionalModelCostsCache,
    passesLastSeenRemaining`. Every other key keeps its value.
-6. Verify with a **direct** API call — never a cached reading, which would "verify" a token it
+6. Verify with a **direct** API call - never a cached reading, which would "verify" a token it
    never used. 401/403 rolls back; a 429 or network failure keeps the swap and warns that it
    could not be confirmed.
 7. Mark the account active.
 
-Both mutations parse, mutate in place and re-serialise — never rebuild from a whitelist, which
+Both mutations parse, mutate in place and re-serialise - never rebuild from a whitelist, which
 would silently drop unrelated keys. A key-count check catches that anyway. Any failure past
 step 4 restores both files from the step-2 backup.
 
