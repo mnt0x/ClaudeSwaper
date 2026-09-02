@@ -416,7 +416,7 @@ function listen(port) {
     // running on 7374 would double the outbound rate and rate-limit both of them.
     if (err.code === 'EADDRINUSE') {
       const url = `http://${HOST}:${port}`;
-      console.log(`\n  Ya hay algo escuchando en ${url} - probablemente otro ClaudeSwaper.`);
+      console.log(`\n  Ya hay algo escuchando en ${url} - probablemente otro LLMSwaper.`);
       console.log(`  Ábrelo ahí, o arranca en otro puerto:  PORT=7400 node server.js\n`);
       if (!process.env.NO_OPEN) oauth.openBrowser(url);
       process.exit(0);
@@ -426,7 +426,7 @@ function listen(port) {
   });
   server.listen(port, BIND, () => {
     const url = `http://${HOST}:${port}`;
-    console.log(`\n  ClaudeSwaper  ->  ${url}`);
+    console.log(`\n  LLMSwaper  ->  ${url}`);
     console.log(`  datos: ${P.dataDir()}`);
     // Inherited from the shell, this silently redirects every read and write to a throwaway
     // config - and the README teaches people to set it for an isolated login.

@@ -1,6 +1,6 @@
-# ClaudeSwaper - internals
+# LLMSwaper - internals
 
-Notes on how Claude Code stores its session, and what ClaudeSwaper does with it.
+Notes on how Claude Code stores its session, and what LLMSwaper does with it.
 Everything here was verified empirically against a live installation, not inferred.
 
 Zero dependencies. Node >= 18 (global `fetch`). No build step.

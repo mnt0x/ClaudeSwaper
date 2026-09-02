@@ -1,4 +1,4 @@
-# ClaudeSwaper en contenedor.
+# LLMSwaper en contenedor.
 #
 #   docker compose up -d          y abre http://127.0.0.1:7373
 #
@@ -11,10 +11,10 @@
 # doblan el ritmo de salida y se rate-limitan la una a la otra. Una u otra, no las dos.
 
 services:
-  claudeswaper:
+  llmswaper:
     build: .
-    image: claudeswaper:latest
-    container_name: claudeswaper
+    image: llmswaper:latest
+    container_name: llmswaper
 
     # 127.0.0.1: en el lado del HOST. El servidor escucha en 0.0.0.0 dentro del contenedor
     # porque no le queda otra, así que el loopback tiene que imponerse aquí. Quitar el
@@ -32,7 +32,7 @@ services:
     volumes:
       # Las cuentas guardadas y la caché de uso, compartidas con una instalación local del
       # repo. Es lo que se quiere casi siempre: das de alta una cuenta con `node server.js` y
-      # el contenedor la ve, y al revés. Un volumen con nombre (`claudeswaper-data:/app/data`)
+      # el contenedor la ve, y al revés. Un volumen con nombre (`llmswaper-data:/app/data`)
       # daría un almacén SEPARADO y vacío - correcto para un servidor que solo usa Docker,
       # desconcertante en una máquina donde ya tenías cuentas dadas de alta.
       - ./data:/app/data

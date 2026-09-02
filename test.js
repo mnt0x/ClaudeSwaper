@@ -19,7 +19,7 @@ function check(name, fn) {
   }
 }
 
-console.log('\nClaudeSwaper self-check\n');
+console.log('\nLLMSwaper self-check\n');
 
 for (const mod of ['lib/paths.js', 'lib/store.js', 'lib/usage.js', 'lib/swap.js', 'lib/credentials.js', 'lib/targets.js']) {
   check(`${mod} module self-check`, () => {
@@ -863,7 +863,7 @@ async function checkAsync(name, fn) {
       assert.strictEqual(ident.accountUuid, null, 'no se puede inventar un accountUuid');
       // Nombrar el panel, en vez de dejarlo vacío: si se deja null, Claude Code se inventa
       // "<nombre>'s Organization", que se lee como una organización real a la que perteneces.
-      assert.strictEqual(ident.organizationName, 'ClaudeSwaper');
+      assert.strictEqual(ident.organizationName, 'LLMSwaper');
       assert.strictEqual(ident.organizationUuid, null, 'no se puede inventar un uuid de organización');
     } finally { store.remove(a.id); }
   });
@@ -939,7 +939,7 @@ async function checkAsync(name, fn) {
       // Un dominio que resuelve a 127.0.0.1 hace que el navegador SÍ conecte con este socket;
       // lo que le delata es que la cabecera Host lleva su dominio, no el loopback.
       assert.strictEqual(await pedir({ Host: 'evil.example' }), 403, 'DNS rebinding debe caer');
-      assert.strictEqual(await pedir({ Host: 'claudeswaper.local' }), 403);
+      assert.strictEqual(await pedir({ Host: 'llmswaper.local' }), 403);
 
       // El puerto NO se valida: al publicar el contenedor con -p el navegador manda el puerto
       // externo, que este proceso no puede conocer. Exigirlo rechazaba todo uso en Docker.

@@ -1,4 +1,4 @@
-/* ClaudeSwaper - instrumento de terminal, monocromo fosforo.
+/* LLMSwaper - instrumento de terminal, monocromo fosforo.
    Un solo color de marca: el verde #00ff9c. El unico segundo lenguaje de color es la rampa
    de severidad (ambar -> naranja -> rojo) que solo aparece cuando una barra se llena: el
    color de una barra ES su estado, se lee de un vistazo. Fondo: una malla verde animada. */
@@ -19,6 +19,10 @@
   --phos: #00ff9c;
   --phos-dim: rgba(0, 255, 156, 0.13);
 
+  /* Canal vacio del medidor. Variable y no color fijo porque es lo mas repetido de la pantalla
+     y en claro un #14211c se lee como una fila de barras negras. */
+  --track: #14211c;
+
   --ok: #00ff9c;
   --warn: #ffcc4d;
   --high: #ff9838;
@@ -37,6 +41,70 @@
   --sev: var(--ok);
   --glow: rgba(0, 255, 156, 0.35); /* halo de lectura del canal, por severidad */
 }
+
+/* ---------- tema claro ----------
+   Solo se redefinen los colores: nada de geometria, tipografia ni tiempos, que son los mismos
+   instrumentos con otra luz. El fosforo baja a #00875a porque #00ff9c sobre blanco da 1.4:1 y
+   es ilegible; a este verde le salen 4.6:1 sobre la superficie, que pasa AA para texto grande y
+   para los elementos de interfaz. Igual con los tres colores de severidad, elegidos oscuros para
+   que un 97% siga leyendose de un vistazo y no como un pastel. */
+:root[data-theme="light"] {
+  --bg: #eef2f0;
+  --surface-1: #ffffff;
+  --surface-2: #f3f7f5;
+  --line: #dde7e2;
+  --line-strong: #c2d3cb;
+
+  --text: #0b1a14;   /* 16.8:1 sobre surface-1 */
+  --text-2: #3a564a; /*  8.1:1 */
+  --text-3: #5c7568; /*  4.9:1 */
+
+  --phos: #00875a;
+  --phos-dim: rgba(0, 135, 90, 0.12);
+
+  --ok: #00875a;
+  --warn: #9a6b00;
+  --high: #c2560c;
+  --crit: #c62139;
+
+  --glow: rgba(0, 135, 90, 0.28);
+  --track: #dde7e2;
+}
+
+/* Colores cableados para fondo oscuro que en claro dejan de funcionar. Se anulan aqui en vez de
+   convertirlos todos en variables: son los pocos que de verdad rompen, y el resto del fichero
+   sigue leyendose como esta escrito. */
+:root[data-theme="light"] .btn:hover:not(:disabled) { background: var(--surface-2); }
+:root[data-theme="light"] .btn:active:not(:disabled) { background: var(--line); }
+:root[data-theme="light"] .logo-trace { color: var(--phos); }
+:root[data-theme="light"] .logo-base { color: rgba(0, 135, 90, 0.35); }
+:root[data-theme="light"] .notice-warn { color: #6b4a00; border-color: rgba(154, 107, 0, 0.4); background: rgba(154, 107, 0, 0.07); }
+:root[data-theme="light"] .notice-error { color: #8f1526; border-color: rgba(198, 33, 57, 0.4); background: rgba(198, 33, 57, 0.06); }
+:root[data-theme="light"] .notice code { background: rgba(0, 0, 0, 0.06); }
+:root[data-theme="light"] .btn-primary { border-color: rgba(0, 135, 90, 0.45); background: rgba(0, 135, 90, 0.08); }
+:root[data-theme="light"] .btn-primary:hover:not(:disabled) { background: rgba(0, 135, 90, 0.15); border-color: rgba(0, 135, 90, 0.7); }
+:root[data-theme="light"] .badge-active { border-color: rgba(0, 135, 90, 0.4); }
+:root[data-theme="light"] .btn-rename:hover,
+:root[data-theme="light"] .tab-rescan:hover { background: rgba(0, 135, 90, 0.12); }
+:root[data-theme="light"] .row.is-active { background: rgba(0, 135, 90, 0.05); }
+:root[data-theme="light"] .row.is-active .state-dot { box-shadow: 0 0 8px rgba(0, 135, 90, 0.55); }
+/* La sombra del panel esta calibrada sobre negro; en claro un 0.9 de negro parece suciedad. */
+:root[data-theme="light"] .panel { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 18px 40px -32px rgba(0, 0, 0, 0.35); }
+:root[data-theme="light"] *::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
+
+/* La rampa de severidad tambien: los tres tonos claros pierden contraste sobre blanco. */
+:root[data-theme="light"] .meter[data-sev="normal"]   { --glow: rgba(0, 135, 90, 0.3); }
+:root[data-theme="light"] .meter[data-sev="medium"]   { --glow: rgba(154, 107, 0, 0.3); }
+:root[data-theme="light"] .meter[data-sev="high"]     { --glow: rgba(194, 86, 12, 0.3); }
+:root[data-theme="light"] .meter[data-sev="critical"] { --glow: rgba(198, 33, 57, 0.3); }
+
+/* El campo de brasas es aditivo sobre negro: sobre blanco no suma nada visible y solo ensucia.
+   En claro el fondo es el fondo, sin ambiente. */
+:root[data-theme="light"] .field { display: none; }
+
+/* La rejilla del pin del logo y los halos estan calibrados para fondo oscuro; en claro pesan
+   demasiado, asi que se atenuan en vez de desaparecer. */
+:root[data-theme="light"] .scope-pin { background: var(--surface-2); }
 
 * { box-sizing: border-box; }
 
@@ -213,8 +281,7 @@ code {
 .btn-remove:hover { color: var(--crit); background: rgba(255, 92, 114, 0.1); }
 .btn-rename:hover { color: var(--phos); background: rgba(0, 255, 156, 0.1); }
 
-/* Ocupa la MISMA celda que .name (columna 2, fila 1) para que al intercambiarse no se mueva
-   nada de la fila; .mail cae sola a la fila 2, como hacia antes bajo el nombre. */
+/* Ocupa la MISMA celda que .name para que al intercambiarse no se mueva nada de la fila. */
 .name-edit {
   grid-column: 2; grid-row: 1;
   min-width: 0; max-width: 15rem;
@@ -308,6 +375,30 @@ main { max-width: 1180px; margin: 0 auto; }
   background: var(--surface-1);
 }
 .tab:focus-visible { outline: 2px solid var(--phos); outline-offset: -2px; }
+
+/* ---------- conmutadores de idioma y tema ----------
+   Al extremo derecho de la barra, despues de refresh: se tocan una vez y luego se olvidan, asi
+   que no compiten por atencion con las acciones que si se repiten. */
+.switch {
+  display: flex; align-items: center;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.switch button {
+  font: inherit;
+  color: var(--text-3);
+  background: transparent;
+  border: none;
+  padding: 0.38rem 0.5rem;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.switch button:hover { color: var(--text-2); }
+.switch button[aria-pressed="true"] { color: var(--bg); background: var(--phos); }
+.switch button:focus-visible { outline: 2px solid var(--phos); outline-offset: -2px; }
 
 /* El rescan va al final de la fila, separado de las pestañas y sin su hover rojo, que es del
    botón de quitar. Discreto: se usa una vez cada muchos días. */
@@ -410,7 +501,7 @@ main { max-width: 1180px; margin: 0 auto; }
 .state-dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--line-strong);
-  align-self: center; grid-row: span 2;
+  align-self: center;
   transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 .row.is-active .state-dot { background: var(--phos); box-shadow: 0 0 8px var(--phos); }
@@ -419,11 +510,6 @@ main { max-width: 1180px; margin: 0 auto; }
 
 .name {
   font-size: 13px; font-weight: 700; letter-spacing: 0.01em;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.mail {
-  grid-column: 2;
-  font-size: 11.5px; color: var(--text-3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -463,7 +549,7 @@ main { max-width: 1180px; margin: 0 auto; }
 .track {
   flex: 1; min-width: 0;
   height: 9px;
-  background: #14211c;
+  background: var(--track);
   -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
   mask-image: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
   overflow: hidden;

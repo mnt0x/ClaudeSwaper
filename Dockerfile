@@ -1,4 +1,4 @@
-# ClaudeSwaper - imagen única para hosts Linux, macOS y Windows.
+# LLMSwaper - imagen única para hosts Linux, macOS y Windows.
 #
 # El contenedor es SIEMPRE Linux; lo que cambia según el host es qué se puede montar y qué deja
 # de funcionar. Está documentado en el README, y el propio panel lo dice en pantalla en vez de
@@ -7,7 +7,7 @@
 #
 # node:22-alpine es multiarquitectura, así que la misma receta produce amd64 y arm64 - esto
 # último importa: sin arm64 la imagen correría emulada en los Mac con Apple Silicon.
-# Publicar ambas:  docker buildx build --platform linux/amd64,linux/arm64 -t claudeswaper .
+# Publicar ambas:  docker buildx build --platform linux/amd64,linux/arm64 -t llmswaper .
 FROM node:22-alpine
 
 # Cero dependencias: no hay npm install, ni build, ni capa de node_modules que cachear.

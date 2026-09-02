@@ -35,4 +35,4 @@ jobs:
 
       # Only that the image builds. Running it in CI would prove little: the container's whole
       # point is reaching a host ~/.claude that a runner does not have.
-      - run: docker build -t claudeswaper:ci .
+      - run: docker build -t llmswaper:ci .

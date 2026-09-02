@@ -1,4 +1,4 @@
-// ClaudeSwaper frontend. No framework, no CDN, no build.
+// LLMSwaper frontend. No framework, no CDN, no build.
 
 // The usage endpoint allows roughly 5 requests per 5 minutes for the WHOLE app. What actually
 // bounds our request rate is the server-side floor (MIN_GAP_MS, 80s between ANY two outbound
@@ -8,6 +8,183 @@
 // usage costs no tokens and does not touch the 5h/weekly quota, so there is nothing to save by
 // polling less. Refresh (the button) forces past the cache; the background poll does not.
 const POLL_MS = 5 * 60 * 1000;
+
+/* ---------------- idioma ----------------
+ *
+ * Dos idiomas en un objeto, sin dependencias ni fichero aparte: la interfaz cabe en unas setenta
+ * cadenas y un JSON extra costaria una peticion mas en el arranque para no ganar nada.
+ *
+ * Las claves con marcado (<code>, <strong>) se inyectan como HTML, y por eso NUNCA se construyen
+ * con datos de fuera: todas viven aqui. Lo que si viene de fuera - un nombre de cuenta, una
+ * variable de entorno - entra siempre por textContent.
+ *
+ * Los mensajes de error del SERVIDOR siguen en castellano: llegan ya redactados por la API y
+ * traducirlos exigiria que esta devolviera codigos. Esta anotado en el README.
+ */
+const I18N = {
+  es: {
+    'addToken': 'añadir token',
+    'addToken.title': 'Añadir una cuenta pegando un token · T',
+    'refresh': 'refresh',
+    'refresh.title': 'Actualizar uso · R',
+    'lang.group': 'Idioma',
+    'theme.group': 'Tema',
+    'theme.dark': 'Tema oscuro',
+    'theme.light': 'Tema claro',
+    'cancel': 'cancelar',
+    'yes': 'sí',
+    'no': 'no',
+
+    'banner.offline': 'Sin respuesta del servidor local. ¿Se ha cerrado <code>node server.js</code>?',
+    'banner.container': 'En contenedor: no puede ver si Claude Code está abierto ni ofrecer targets de WSL. El swap sobre el host sí funciona si montaste su <code>~/.claude</code>.',
+    'banner.env': 'gana al fichero de credenciales: mientras siga definida, los cambios de cuenta <strong>no tendrán efecto</strong> en Claude Code.',
+
+    'dir.label': 'Importar desde otra carpeta de configuración',
+    'dir.submit': 'importar',
+    'dir.help': 'La carpeta que usaste al ejecutar <code>CLAUDE_CONFIG_DIR=… claude</code>. Tu sesión activa no se toca.',
+
+    'token.label': 'Añadir una cuenta con un token de larga duración',
+    'token.ph': 'pega aquí el token',
+    'token.namePh': 'nombre (opcional)',
+    'token.nameAria': 'Nombre para esta cuenta',
+    'token.submit': 'añadir',
+    'token.help': 'Genéralo con <code>claude setup-token</code>: vale un año y no hace falta volver a entrar. Solo da permiso de inferencia, así que esa cuenta no podrá mostrar plan ni correo.',
+
+    'tabs.group': 'Entorno',
+    'rescan.title': 'Buscar distros de WSL otra vez',
+    'rescan.none': 'Sin cambios: los mismos entornos de antes',
+    'tab.running': 'Claude Code está abierto en {name}',
+
+    'empty.title': '0 cuentas registradas',
+    'empty.step1': 'Ejecuta <code>claude setup-token</code> en una terminal.',
+    'empty.step2': 'Apruébalo en el navegador y copia el token que imprime.',
+    'empty.step3': 'Pulsa <strong>Añadir token</strong> y pégalo aquí.',
+    'empty.footnote': 'Una vez por cuenta y dura un año. También puedes <strong>importar</strong> la sesión que ya tengas abierta: esas cuentas sí muestran consumo sin gastar tokens.',
+
+    'import': 'import',
+    'import.current': 'import cuenta actual',
+    'import.title': 'Guarda la cuenta con la que tienes sesión ahora en este entorno · Mayús+clic para una carpeta CLAUDE_CONFIG_DIR',
+
+    'col.account': 'cuenta',
+    'col.session': 'sesión · 5h',
+    'col.week': 'semana · 7d',
+    'col.action': 'Acción',
+
+    'swap': 'swap',
+    'inUse': 'en uso',
+    'swap.title': 'Poner {name} como activa en {env}',
+    'rename.title': 'Renombrar {name}',
+    'remove.title': 'Quitar {name} del dashboard',
+    'remove.q': '¿quitar?',
+    'remove.aria': '¿Quitar {name} del dashboard?',
+
+    'reset.done': 'Reiniciado',
+    'reset.dh': 'Se reinicia en {d} d {h} h',
+    'reset.hm': 'Se reinicia en {h} h {m} min',
+    'reset.m': 'Se reinicia en {m} min',
+    'reset.s': 'Se reinicia en {s} s',
+    'sync.now': 'Actualizado ahora',
+    'sync.s': 'Actualizado hace {s} s',
+    'sync.min': 'Actualizado hace {m} min',
+
+    'note.stale': 'Datos de {age}',
+    'note.ageMin': 'hace {m} min',
+    'note.ageUnder': 'hace menos de un minuto',
+    'note.expired': 'Token caducado. Haz /login con esta cuenta y vuelve a importarla.',
+
+    'toast.added': 'Añadida: {name}',
+    'toast.imported': 'Importada: {name}',
+    'toast.removed': '{name} eliminada del dashboard',
+    'toast.swapped': 'Cuenta activa en {env}: {name}',
+    'toast.swapFailed': 'No se pudo cambiar: {error}',
+  },
+
+  en: {
+    'addToken': 'add token',
+    'addToken.title': 'Add an account by pasting a token · T',
+    'refresh': 'refresh',
+    'refresh.title': 'Refresh usage · R',
+    'lang.group': 'Language',
+    'theme.group': 'Theme',
+    'theme.dark': 'Dark theme',
+    'theme.light': 'Light theme',
+    'cancel': 'cancel',
+    'yes': 'yes',
+    'no': 'no',
+
+    'banner.offline': 'No answer from the local server. Did <code>node server.js</code> stop?',
+    'banner.container': 'In a container: it cannot see whether Claude Code is running, and there are no WSL targets. Swapping the host still works if you mounted its <code>~/.claude</code>.',
+    'banner.env': 'outranks the credentials file: while it is set, switching accounts <strong>will have no effect</strong> in Claude Code.',
+
+    'dir.label': 'Import from another config directory',
+    'dir.submit': 'import',
+    'dir.help': 'The directory you used when running <code>CLAUDE_CONFIG_DIR=… claude</code>. Your active session is left alone.',
+
+    'token.label': 'Add an account with a long-lived token',
+    'token.ph': 'paste the token here',
+    'token.namePh': 'name (optional)',
+    'token.nameAria': 'Name for this account',
+    'token.submit': 'add',
+    'token.help': 'Mint one with <code>claude setup-token</code>: it lasts a year and needs no further login. It only grants inference, so that account cannot show a plan or an email.',
+
+    'tabs.group': 'Environment',
+    'rescan.title': 'Scan for WSL distros again',
+    'rescan.none': 'No change: the same environments as before',
+    'tab.running': 'Claude Code is running in {name}',
+
+    'empty.title': 'No accounts yet',
+    'empty.step1': 'Run <code>claude setup-token</code> in a terminal.',
+    'empty.step2': 'Approve it in the browser and copy the token it prints.',
+    'empty.step3': 'Press <strong>add token</strong> and paste it here.',
+    'empty.footnote': 'Once per account, and it lasts a year. You can also <strong>import</strong> a session you already have open: those accounts do show usage without spending tokens.',
+
+    'import': 'import',
+    'import.current': 'import current account',
+    'import.title': 'Store the account you are signed in with in this environment · Shift+click for a CLAUDE_CONFIG_DIR folder',
+
+    'col.account': 'account',
+    'col.session': 'session · 5h',
+    'col.week': 'week · 7d',
+    'col.action': 'Action',
+
+    'swap': 'swap',
+    'inUse': 'in use',
+    'swap.title': 'Make {name} active in {env}',
+    'rename.title': 'Rename {name}',
+    'remove.title': 'Remove {name} from the dashboard',
+    'remove.q': 'remove?',
+    'remove.aria': 'Remove {name} from the dashboard?',
+
+    'reset.done': 'Reset',
+    'reset.dh': 'Resets in {d} d {h} h',
+    'reset.hm': 'Resets in {h} h {m} min',
+    'reset.m': 'Resets in {m} min',
+    'reset.s': 'Resets in {s} s',
+    'sync.now': 'Refreshed just now',
+    'sync.s': 'Refreshed {s} s ago',
+    'sync.min': 'Refreshed {m} min ago',
+
+    'note.stale': 'Data from {age}',
+    'note.ageMin': '{m} min ago',
+    'note.ageUnder': 'less than a minute ago',
+    'note.expired': 'Token expired. Run /login with this account and import it again.',
+
+    'toast.added': 'Added: {name}',
+    'toast.imported': 'Imported: {name}',
+    'toast.removed': '{name} removed from the dashboard',
+    'toast.swapped': 'Active account in {env}: {name}',
+    'toast.swapFailed': 'Could not switch: {error}',
+  },
+};
+
+let lang = document.documentElement.lang === 'en' ? 'en' : 'es';
+
+/** Una cadena traducida, con {marcadores} sustituidos. Cae al castellano si falta la clave. */
+function t(key, vars) {
+  let s = (I18N[lang] && I18N[lang][key]) ?? I18N.es[key] ?? key;
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.split('{' + k + '}').join(v);
+  return s;
+}
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -36,6 +213,34 @@ function selectTarget(id) {
   selectedTarget = id;
   try { localStorage.setItem('swaper.target', id); } catch { /* private window: not worth failing over */ }
   render();
+}
+
+/**
+ * Rellena todo lo marcado con data-i18n*. Se ejecuta al arrancar y en cada cambio de idioma;
+ * como render() reconstruye las filas, tambien despues de cada render.
+ */
+function applyI18n(root = document) {
+  for (const el of root.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  // Solo cadenas del diccionario de arriba, jamas datos de fuera.
+  for (const el of root.querySelectorAll('[data-i18n-html]')) el.innerHTML = t(el.dataset.i18nHtml);
+  for (const el of root.querySelectorAll('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle);
+  for (const el of root.querySelectorAll('[data-i18n-aria]')) el.setAttribute('aria-label', t(el.dataset.i18nAria));
+  for (const el of root.querySelectorAll('[data-i18n-ph]')) el.placeholder = t(el.dataset.i18nPh);
+}
+
+function setLang(next) {
+  lang = next;
+  document.documentElement.lang = next;
+  try { localStorage.setItem('swaper.lang', next); } catch { /* ventana privada: no vale fallar por esto */ }
+  for (const b of $$('#switch-lang button')) b.setAttribute('aria-pressed', String(b.dataset.lang === next));
+  applyI18n();
+  render(); // las filas llevan textos construidos en JS, no solo data-i18n
+}
+
+function setTheme(next) {
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem('swaper.theme', next); } catch { /* idem */ }
+  for (const b of $$('#switch-theme button')) b.setAttribute('aria-pressed', String(b.dataset.theme === next));
 }
 
 /* ---------------- transport ---------------- */
@@ -73,7 +278,7 @@ function countdown(iso) {
   const target = Date.parse(iso);
   if (Number.isNaN(target)) return '';
   const ms = target - Date.now();
-  if (ms <= 0) return 'Reiniciado';
+  if (ms <= 0) return t('reset.done');
 
   const total = Math.floor(ms / 1000);
   const d = Math.floor(total / 86400);
@@ -81,19 +286,18 @@ function countdown(iso) {
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
 
-  if (d > 0) return `Se reinicia en ${d} d ${h} h`;
-  if (h > 0) return `Se reinicia en ${h} h ${m} min`;
-  if (m > 0) return `Se reinicia en ${m} min`;
-  return `Se reinicia en ${s} s`;
+  if (d > 0) return t('reset.dh', { d, h });
+  if (h > 0) return t('reset.hm', { h, m });
+  if (m > 0) return t('reset.m', { m });
+  return t('reset.s', { s });
 }
 
 function syncLabel(ms) {
   if (!ms) return '';
   const s = Math.floor((Date.now() - ms) / 1000);
-  if (s < 15) return 'Actualizado ahora';
-  if (s < 60) return `Actualizado hace ${s} s`;
-  const m = Math.floor(s / 60);
-  return `Actualizado hace ${m} min`;
+  if (s < 15) return t('sync.now');
+  if (s < 60) return t('sync.s', { s });
+  return t('sync.min', { m: Math.floor(s / 60) });
 }
 
 function fillMeter(meterEl, data, extra) {
@@ -141,16 +345,15 @@ function renderSkeletons(n = 2) {
 function noteFor(usage) {
   if (!usage) return null;
   if (usage.ok) {
-    if (usage.locked) return { tone: 'warn', text: `Bloqueado: ${usage.locked}` };
     if (usage.stale) {
       const mins = Math.round((Date.now() - usage.staleSince) / 60000);
-      const age = mins >= 1 ? `hace ${mins} min` : 'hace menos de un minuto';
-      return { tone: 'warn', text: `Datos de ${age}` };
+      const age = mins >= 1 ? t('note.ageMin', { m: mins }) : t('note.ageUnder');
+      return { tone: 'warn', text: t('note.stale', { age }) };
     }
     return null;
   }
   if (usage.needsRelogin) {
-    return { tone: 'error', text: 'Token caducado. Haz /login con esta cuenta y vuelve a importarla.' };
+    return { tone: 'error', text: t('note.expired') };
   }
   // Throttled or rate-limited says nothing about the account: it still swaps.
   return { tone: 'warn', text: usage.error };
@@ -168,7 +371,6 @@ function buildRow(account, target) {
   }
 
   $('.name', node).textContent = account.label;
-  $('.mail', node).textContent = account.email || '';
 
   const usable = usage && usage.ok ? usage : null;
   const scoped = usable ? (usable.scoped || []).map((s) => `${s.label} ${s.percent}%`).join(' · ') : '';
@@ -188,18 +390,18 @@ function buildRow(account, target) {
     swapBtn.remove();
   } else {
     swapBtn.disabled = swapping;
-    swapBtn.title = `Poner ${account.label} como activa en ${target.label}`;
+    swapBtn.title = t('swap.title', { name: account.label, env: target.label });
     swapBtn.addEventListener('click', () => doSwap(account.id, target.id, swapBtn));
   }
   const renameBtn = $('.btn-rename', node);
-  renameBtn.title = `Renombrar ${account.label}`;
+  renameBtn.title = t('rename.title', { name: account.label });
   renameBtn.setAttribute('aria-label', renameBtn.title);
   renameBtn.addEventListener('click', () => armRename(node, account));
 
   // Per row, or every remove button in the panel announces the same name and a screen
   // reader user cannot tell which account they are about to drop.
   const removeBtn = $('.btn-remove', node);
-  removeBtn.title = `Quitar ${account.label} del dashboard`;
+  removeBtn.title = t('remove.title', { name: account.label });
   removeBtn.setAttribute('aria-label', removeBtn.title);
   removeBtn.addEventListener('click', () => armRemoval(node, account));
 
@@ -235,7 +437,7 @@ async function rescanTargets(button) {
   try {
     await refresh(false, true);
     const ahora = targetList.map((t) => t.id).join('|');
-    if (ahora === antes) toast('Sin cambios: los mismos entornos de antes');
+    if (ahora === antes) toast(t('rescan.none'));
   } catch (err) {
     toast(err.message, 'err');
   } finally {
@@ -271,7 +473,7 @@ function buildTabs() {
       dot.className = 'tab-run';
       dot.setAttribute('aria-hidden', 'true');
       tab.append(dot);
-      tab.title = `Claude Code está abierto en ${target.label}`;
+      tab.title = t('tab.running', { name: target.label });
     }
 
     tab.addEventListener('click', () => selectTarget(target.id));
@@ -283,7 +485,7 @@ function buildTabs() {
   const rescan = document.createElement('button');
   rescan.type = 'button';
   rescan.className = 'btn-icon tab-rescan';
-  rescan.title = 'Buscar distros de WSL otra vez';
+  rescan.title = t('rescan.title');
   rescan.setAttribute('aria-label', rescan.title);
   rescan.innerHTML = '<svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-refresh"/></svg>';
   rescan.addEventListener('click', () => rescanTargets(rescan));
@@ -328,6 +530,9 @@ function render() {
   } else {
     $('#tabs').hidden = true;
   }
+  // Las plantillas clonadas traen sus data-i18n sin resolver, asi que se traducen aqui, despues
+  // de insertarlas: hacerlo solo al arrancar dejaria cada fila nueva en el idioma del HTML.
+  applyI18n(envsEl);
   $('#sync').textContent = syncLabel(lastFetch);
 }
 
@@ -362,7 +567,7 @@ function armRemoval(node, account) {
   node.classList.add('is-confirming');
   // Named, or a screen reader lands on a bare "no" button with no idea what it answers.
   confirmEl.setAttribute('role', 'group');
-  confirmEl.setAttribute('aria-label', `¿Quitar ${account.label} del dashboard?`);
+  confirmEl.setAttribute('aria-label', t('remove.aria', { name: account.label }));
   openConfirm = ac;
   $('.btn-no', confirmEl).focus();
 
@@ -379,7 +584,7 @@ function armRemoval(node, account) {
     close();
     try {
       await api(`/api/accounts/${account.id}`, { method: 'DELETE' });
-      toast(`${account.label} eliminada del dashboard`, 'ok');
+      toast(t('toast.removed', { name: account.label }), 'ok');
       await refresh(false);
     } catch (err) {
       toast(err.message, 'err');
@@ -458,13 +663,13 @@ async function doSwap(id, targetId, button) {
 
   try {
     const result = await api('/api/swap', { method: 'POST', body: { id, target: targetId } });
-    toast(`Cuenta activa en ${result.targetLabel || 'host'}: ${result.account.label}`, 'ok');
+    toast(t('toast.swapped', { env: result.targetLabel || 'host', name: result.account.label }), 'ok');
     for (const w of result.warnings || []) toast(w);
     // The swap already fetched this account's usage to verify the token; the server
     // seeded its cache with it, so a plain refresh picks it up for free.
     await refresh(false);
   } catch (err) {
-    toast(`No se pudo cambiar: ${err.message}`, 'err');
+    toast(t('toast.swapFailed', { error: err.message }), 'err');
   } finally {
     // In the finally, not the catch: the swap can succeed and the refresh right after it
     // still fail (server stopped, machine suspended), and refresh() returns without
@@ -487,7 +692,7 @@ async function addByToken(token, label) {
   buttons.forEach((b) => { b.disabled = true; b.classList.add('is-loading'); });
   try {
     const result = await api('/api/accounts/token', { method: 'POST', body: { token, label } });
-    toast(`Añadida: ${result.account.label}`, 'ok');
+    toast(t('toast.added', { name: result.account.label }), 'ok');
     for (const w of result.warnings || []) toast(w);
     await refresh(false);
     return true;
@@ -506,7 +711,7 @@ async function importCurrent(configDir, targetId = 'host') {
     const result = await api('/api/accounts/import', {
       method: 'POST', body: { target: targetId, ...(configDir ? { configDir } : {}) },
     });
-    toast(`Importada: ${result.account.email}`, 'ok');
+    toast(t('toast.imported', { name: result.account.email || result.account.label }), 'ok');
     await refresh(false);
   } catch (err) {
     toast(err.message, 'err');
@@ -585,6 +790,14 @@ async function reportEnvironment() {
 /* ---------------- boot ---------------- */
 
 $('#btn-refresh').addEventListener('click', () => refresh(true));
+
+for (const b of $$('#switch-lang button')) b.addEventListener('click', () => setLang(b.dataset.lang));
+for (const b of $$('#switch-theme button')) b.addEventListener('click', () => setTheme(b.dataset.theme));
+// El estado inicial lo fijo el script del <head> para no pintar el tema equivocado; aqui solo se
+// refleja en los botones y se traduce lo estatico.
+setTheme(document.documentElement.dataset.theme || 'dark');
+for (const b of $$('#switch-lang button')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+applyI18n();
 
 // Plain click imports the live session. Shift-click imports from an isolated login
 // (CLAUDE_CONFIG_DIR=... claude /login), so another account can be captured without

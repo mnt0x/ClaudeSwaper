@@ -1,10 +1,12 @@
 <div align="center">
 
-# ClaudeSwaper
+# LLMSwaper
 
-**Switch the active Claude Code account with one click - and see how much of each account's quota is left before you do.**
+**Switch the active AI-subscription account with one click - and see how much of each account's quota is left before you do.**
 
-[![test](https://github.com/monac-cc/ClaudeSwaper/actions/workflows/test.yml/badge.svg)](https://github.com/monac-cc/ClaudeSwaper/actions/workflows/test.yml)
+<sub>Claude Code today. Other subscriptions are on the way - see <a href="#other-providers">Other providers</a>.</sub>
+
+[![test](https://github.com/monac-cc/LLMSwaper/actions/workflows/test.yml/badge.svg)](https://github.com/monac-cc/LLMSwaper/actions/workflows/test.yml)
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](package.json)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](#docker)
@@ -19,14 +21,17 @@ No `npm install`, no build step, no telemetry, nothing leaves your machine but t
 makes to Anthropic. One `server.js`, seven small modules and three static files.
 
 <div align="center">
-  <img src="docs/screenshot.png" alt="The ClaudeSwaper panel: environment tabs, four accounts and their session and weekly quota meters" width="100%">
+  <img src="docs/screenshot.png" alt="The LLMSwaper panel: environment tabs, four accounts and their session and weekly quota meters" width="100%">
   <sub>Accounts and quota figures above are fictional.</sub>
 </div>
 
-> **The interface is in Spanish.** *añadir token* = add token, *importar* = import,
-> *swap* = switch to this account, *renombrar* = rename, *quitar* = remove,
-> *sesión · 5h* / *semana · 7d* = the two quota windows,
-> *se reinicia en* = resets in, *actualizado ahora* = refreshed just now.
+The interface is **bilingual**: the **ES / EN** switch at the top right changes every label, and
+the moon/sun switch beside it changes the theme. Both choices are remembered, and the theme
+follows your system preference until you pick one.
+
+> Error text coming **from the server** is still Spanish only. Those messages are composed by the
+> API rather than the page, so translating them needs the API to return codes instead of
+> sentences; it is a known gap, not an oversight.
 
 ---
 
@@ -35,7 +40,8 @@ makes to Anthropic. One `server.js`, seven small modules and three static files.
 - [Why](#why) · [Requirements](#requirements) · [Quick start](#quick-start)
 - [Adding accounts](#adding-accounts) · [Usage meters](#usage-meters) · [Switching](#switching)
 - [Environments](#environments)
-- [Docker](#docker) · [Security](#security) · [Limitations](#limitations)
+- [Docker](#docker) · [Other providers](#other-providers) · [Security](#security)
+- [Limitations](#limitations)
 - [Troubleshooting](#troubleshooting) · [Development](#development)
 
 ---
@@ -46,7 +52,7 @@ Claude Code holds one account at a time. Using a second one means `claude`, `/lo
 round trip, every time. If you have a personal account and a work one, that is a tax you pay all
 day.
 
-ClaudeSwaper stores each account once and makes the change a click - on your machine and inside
+LLMSwaper stores each account once and makes the change a click - on your machine and inside
 your WSL distros, from the same screen. It also shows what each account has left of its 5-hour
 session window and its weekly window, so the question it actually answers is *which account should
 I switch to right now*.
@@ -61,8 +67,8 @@ I switch to right now*.
 ## Quick start
 
 ```bash
-git clone https://github.com/monac-cc/ClaudeSwaper.git
-cd ClaudeSwaper
+git clone https://github.com/monac-cc/LLMSwaper.git
+cd LLMSwaper
 node server.js
 ```
 
@@ -188,13 +194,13 @@ docker compose up -d      # then open http://127.0.0.1:7373
 Or by hand, publishing on a port of your choice:
 
 ```bash
-docker build -t claudeswaper .
-docker run -d --name claudeswaper \
+docker build -t llmswaper .
+docker run -d --name llmswaper \
   -p 127.0.0.1:7373:7373 \
   -v "$PWD/data:/app/data" \
   -v "$HOME/.claude:/home/node/.claude" \
   -v "$HOME/.claude.json:/home/node/.claude.json" \
-  claudeswaper
+  llmswaper
 ```
 
 **Publish on `127.0.0.1` only.** The server listens on `0.0.0.0` *inside* the container because it
@@ -227,6 +233,30 @@ What a container cannot do, on any host:
 
 The panel says both of those on screen instead of reporting "not running" for something it simply
 cannot see.
+
+## Other providers
+
+The name is LLMSwaper rather than ClaudeSwaper because the problem is not specific to Claude: any
+coding tool backed by a personal subscription holds **one** account at a time and makes you log in
+again to use another. Claude Code is what ships today; the rest are candidates, in rough order of
+how well they fit.
+
+| Provider | Tool | Status |
+|---|---|---|
+| **Anthropic** | Claude Code | **Shipping** - host and WSL, token or import |
+| **OpenAI** | Codex CLI | Coming soon - credentials in `~/.codex/auth.json` |
+| **GitHub** | Copilot | Considering - token under `~/.config/github-copilot/` |
+| **Google** | Gemini CLI | Considering - `~/.gemini/` |
+| **Cursor / Windsurf** | editor sign-in | Investigating - credentials are held by the editor, not a file this tool can safely rewrite |
+
+What makes a provider a good fit is narrow, and worth stating so the list is not read as a
+promise: the tool must keep its credentials in a **file this app can rewrite**, the account must
+be identifiable well enough to label, and swapping must not require killing a running session. A
+provider that stores its session in an OS keychain, or that pins it to a running process, needs a
+different mechanism than the one here.
+
+If a tool you use fits that description, an issue naming it and where it keeps its credentials is
+the most useful thing you can send.
 
 ## Security
 

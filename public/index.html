@@ -3,9 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ClaudeSwaper</title>
-<meta name="color-scheme" content="dark">
+<title>LLMSwaper</title>
+<meta name="color-scheme" content="dark light">
 <link rel="stylesheet" href="/style.css">
+<!-- Tema antes de pintar: leerlo aqui, sincrono, evita el fogonazo oscuro de un cuadro entero
+     cuando la preferencia guardada es clara. Es la unica razon por la que hay JS en el head. -->
+<script>
+  try {
+    var t = localStorage.getItem('swaper.theme');
+    if (!t) t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t;
+    var l = localStorage.getItem('swaper.lang');
+    if (!l) l = (navigator.language || 'es').toLowerCase().startsWith('es') ? 'es' : 'en';
+    document.documentElement.lang = l;
+  } catch (e) { document.documentElement.dataset.theme = 'dark'; }
+</script>
 <!-- Favicon = el mismo logo de la web: las dobles flechas #i-swap, verde fosforo sobre
      el fondo del pin. Trazo algo mas grueso (1.8) para que se lea a 16px en la pestana. -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'><rect width='18' height='18' rx='4' fill='%23040706'/><g fill='none' stroke='%2300ff9c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M3.5 6.5h11m0 0-3-3m3 3-3 3'/><path d='M14.5 13.5h-11m0 0 3 3m-3-3 3-3'/></g></svg>">
@@ -14,7 +26,8 @@
 
 <!-- Fondo firma: campo de brasas de fosforo a la deriva (flow-field). Lo pinta app.js en
      este canvas, a pantalla completa y DETRAS de todo (z-index:-1 en .field, CSS). Sin
-     eventos (pointer-events:none via CSS). aria-hidden: es puramente ambiental. -->
+     eventos (pointer-events:none via CSS). aria-hidden: es puramente ambiental.
+     En tema claro se oculta por CSS: es aditivo y sobre blanco no suma nada. -->
 <canvas class="field" id="field" aria-hidden="true"></canvas>
 
 <!-- Icon set: one library, one stroke weight, referenced by <use>. -->
@@ -41,12 +54,19 @@
     <g id="i-alert" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M9 2.8 16.2 15H1.8L9 2.8Z"/><path d="M9 7v3.4"/><path d="M9 12.8h.01"/>
     </g>
+    <g id="i-moon" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 11.2A6.5 6.5 0 0 1 6.8 3a6.5 6.5 0 1 0 8.2 8.2Z"/>
+    </g>
+    <g id="i-sun" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="9" cy="9" r="3.4"/>
+      <path d="M9 1.6v1.6M9 14.8v1.6M1.6 9h1.6M14.8 9h1.6M3.8 3.8l1.1 1.1M13.1 13.1l1.1 1.1M14.2 3.8l-1.1 1.1M4.9 13.1l-1.1 1.1"/>
+    </g>
   </defs>
 </svg>
 
 <header class="masthead">
   <div class="identity">
-    <!-- Logo de ClaudeSwaper: las dobles flechas #i-swap como traza viva de osciloscopio
+    <!-- Logo de LLMSwaper: las dobles flechas #i-swap como traza viva de osciloscopio
          dentro de un pin con su mini-rejilla. Un punto de luz la recorre (app.js). -->
     <div class="scope-pin" aria-hidden="true">
       <svg class="scope-logo" viewBox="0 0 18 18" focusable="false"><use class="logo-base" href="#i-swap"/><use class="logo-trace" id="logo-swap" href="#i-swap"/></svg>
@@ -56,20 +76,36 @@
 
   <div class="toolbar">
     <span class="sync" id="sync" aria-live="polite"></span>
-    <button class="btn btn-primary" id="btn-add-token" title="Añadir una cuenta pegando un token · T">
+    <button class="btn btn-primary" id="btn-add-token" data-i18n-title="addToken.title">
       <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-key"/></svg>
-      <span>añadir token</span>
+      <span data-i18n="addToken">añadir token</span>
     </button>
-    <button class="btn" id="btn-refresh" title="Actualizar uso · R">
+    <button class="btn" id="btn-refresh" data-i18n-title="refresh.title">
       <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-refresh"/></svg>
-      <span>refresh</span>
+      <span data-i18n="refresh">refresh</span>
     </button>
+
+    <!-- Idioma y tema. Se tocan una vez y se olvidan, asi que van al extremo, despues de las
+         acciones que si se repiten. aria-pressed marca cual esta activo, que es lo que un
+         lector de pantalla necesita para un par de opciones excluyentes. -->
+    <div class="switch" id="switch-lang" role="group" data-i18n-aria="lang.group">
+      <button type="button" data-lang="es" aria-pressed="false">ES</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+    <div class="switch" id="switch-theme" role="group" data-i18n-aria="theme.group">
+      <button type="button" data-theme="dark" aria-pressed="false" data-i18n-aria="theme.dark">
+        <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-moon"/></svg>
+      </button>
+      <button type="button" data-theme="light" aria-pressed="false" data-i18n-aria="theme.light">
+        <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-sun"/></svg>
+      </button>
+    </div>
   </div>
 </header>
 
 <div class="notice notice-error" id="banner-offline" hidden>
   <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-alert"/></svg>
-  <p>Sin respuesta del servidor local. ¿Se ha cerrado <code>node server.js</code>?</p>
+  <p data-i18n-html="banner.offline"></p>
 </div>
 
 <!-- Dos avisos que solo el servidor puede saber, y que en pantalla son indistinguibles de
@@ -78,30 +114,26 @@
      que convierte cada swap en un no-op silencioso. Se piden UNA vez, al arrancar. -->
 <div class="notice notice-warn" id="banner-container" hidden>
   <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-alert"/></svg>
-  <p>En contenedor: no puede ver si Claude Code está abierto ni ofrecer targets de WSL. El swap
-     sobre el host sí funciona si montaste su <code>~/.claude</code>.</p>
+  <p data-i18n-html="banner.container"></p>
 </div>
 
 <div class="notice notice-error" id="banner-env" hidden>
   <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-alert"/></svg>
-  <p><strong id="env-vars"></strong> gana al fichero de credenciales: mientras siga definida,
-     los cambios de cuenta <strong>no tendrán efecto</strong> en Claude Code.</p>
+  <p><strong id="env-vars"></strong> <span data-i18n-html="banner.env"></span></p>
 </div>
 
 <!-- Isolated-login import. An inline field, not a prompt: it stays on the page, it can
      be styled, and Escape or cancel returns you exactly where you were. -->
 <form class="field-row" id="dir-form" hidden>
-  <label for="dir-input">Importar desde otra carpeta de configuración</label>
+  <label for="dir-input" data-i18n="dir.label">Importar desde otra carpeta de configuración</label>
   <div class="field-line">
     <span class="field-prefix" aria-hidden="true">CLAUDE_CONFIG_DIR</span>
     <input type="text" id="dir-input" name="dir" spellcheck="false" autocomplete="off"
            placeholder="/tmp/cuenta2" aria-describedby="dir-help">
-    <button class="btn btn-primary" type="submit">importar</button>
-    <button class="btn" type="button" id="dir-cancel">cancelar</button>
+    <button class="btn btn-primary" type="submit" data-i18n="dir.submit">importar</button>
+    <button class="btn" type="button" id="dir-cancel" data-i18n="cancel">cancelar</button>
   </div>
-  <p class="field-help" id="dir-help">
-    La carpeta que usaste al ejecutar <code>CLAUDE_CONFIG_DIR=… claude</code>. Tu sesión activa no se toca.
-  </p>
+  <p class="field-help" id="dir-help" data-i18n-html="dir.help"></p>
 </form>
 
 <!-- Alta por token de larga duracion (claude setup-token). Mismo patron inline que #dir-form:
@@ -109,20 +141,17 @@
      del token es type=password: no se teclea, se pega, y asi no queda a la vista de nadie que
      mire la pantalla ni lo guarda el autocompletado. -->
 <form class="field-row" id="token-form" hidden>
-  <label for="token-input">Añadir una cuenta con un token de larga duración</label>
+  <label for="token-input" data-i18n="token.label">Añadir una cuenta con un token de larga duración</label>
   <div class="field-line">
     <span class="field-prefix" aria-hidden="true">token</span>
     <input type="password" id="token-input" name="token" spellcheck="false" autocomplete="off"
-           placeholder="pega aquí el token" aria-describedby="token-help">
+           data-i18n-ph="token.ph" aria-describedby="token-help">
     <input type="text" id="token-label" name="label" spellcheck="false" autocomplete="off"
-           placeholder="nombre (opcional)" aria-label="Nombre para esta cuenta" maxlength="60">
-    <button class="btn btn-primary" type="submit">añadir</button>
-    <button class="btn" type="button" id="token-cancel">cancelar</button>
+           data-i18n-ph="token.namePh" data-i18n-aria="token.nameAria" maxlength="60">
+    <button class="btn btn-primary" type="submit" data-i18n="token.submit">añadir</button>
+    <button class="btn" type="button" id="token-cancel" data-i18n="cancel">cancelar</button>
   </div>
-  <p class="field-help" id="token-help">
-    Genéralo con <code>claude setup-token</code>: vale un año y no hace falta volver a entrar.
-    Solo da permiso de inferencia, así que esa cuenta cambiará bien pero no podrá mostrar consumo.
-  </p>
+  <p class="field-help" id="token-help" data-i18n-html="token.help"></p>
 </form>
 
 <main>
@@ -130,28 +159,25 @@
        de WSL. Las cuentas son LAS MISMAS en todas; lo que cambia por entorno es cuál está activa
        y en qué ficheros escribe el swap. Antes se apilaban todas las secciones, que con tres
        entornos obligaba a bajar para ver la última. -->
-  <div class="tabs" id="tabs" role="tablist" aria-label="Entorno" hidden></div>
+  <div class="tabs" id="tabs" role="tablist" data-i18n-aria="tabs.group" hidden></div>
   <div id="envs" aria-busy="true"></div>
 
   <section class="empty" id="empty" hidden>
-    <h2>0 cuentas registradas</h2>
+    <h2 data-i18n="empty.title">0 cuentas registradas</h2>
     <ol class="steps">
-      <li><span>Ejecuta <code>claude setup-token</code> en una terminal.</span></li>
-      <li><span>Apruébalo en el navegador y copia el token que imprime.</span></li>
-      <li><span>Pulsa <strong>Añadir token</strong> y pégalo aquí.</span></li>
+      <li><span data-i18n-html="empty.step1"></span></li>
+      <li><span data-i18n="empty.step2">Apruébalo en el navegador y copia el token que imprime.</span></li>
+      <li><span data-i18n-html="empty.step3"></span></li>
     </ol>
-    <p class="footnote">
-      Una vez por cuenta y dura un año. También puedes <strong>importar</strong> la sesión que ya
-      tengas abierta: esas cuentas sí muestran consumo, pero hay que entrar con cada una.
-    </p>
+    <p class="footnote" data-i18n-html="empty.footnote"></p>
     <div class="empty-actions">
       <button class="btn btn-primary" id="btn-add-token-empty">
         <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-key"/></svg>
-        <span>añadir token</span>
+        <span data-i18n="addToken">añadir token</span>
       </button>
       <button class="btn" id="btn-import-empty">
         <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-import"/></svg>
-        <span>import cuenta actual</span>
+        <span data-i18n="import.current">import cuenta actual</span>
       </button>
     </div>
   </section>
@@ -162,18 +188,17 @@
 <template id="tpl-env">
   <section class="env">
     <div class="env-head">
-      <button class="btn btn-import-env" type="button"
-              title="Guarda la cuenta con la que tienes sesión ahora en este entorno · Mayús+clic para una carpeta CLAUDE_CONFIG_DIR">
+      <button class="btn btn-import-env" type="button" data-i18n-title="import.title">
         <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-import"/></svg>
-        <span>import</span>
+        <span data-i18n="import">import</span>
       </button>
     </div>
     <div class="panel">
       <div class="columns">
-        <span>account</span>
-        <span>session · 5h</span>
-        <span>week · 7d</span>
-        <span class="sr-only">Acción</span>
+        <span data-i18n="col.account">account</span>
+        <span data-i18n="col.session">session · 5h</span>
+        <span data-i18n="col.week">week · 7d</span>
+        <span class="sr-only" data-i18n="col.action">Acción</span>
       </div>
       <div class="rows"></div>
     </div>
@@ -185,10 +210,9 @@
     <div class="who">
       <span class="state-dot" aria-hidden="true"></span>
       <span class="name"></span>
-      <!-- Sits in the same grid cell as .name and swaps with it, so renaming happens where the
-           name already is instead of moving the row about. -->
+      <!-- Ocupa la misma celda que .name y se intercambia con él, así renombrar ocurre donde el
+           nombre ya está en vez de mover la fila. -->
       <input class="name-edit" type="text" maxlength="60" spellcheck="false" autocomplete="off" hidden>
-      <span class="mail"></span>
     </div>
 
     <div class="meter" data-kind="session">
@@ -210,22 +234,22 @@
     <div class="actions">
       <button class="btn btn-swap">
         <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-swap"/></svg>
-        <span>swap</span>
+        <span data-i18n="swap">swap</span>
       </button>
-      <span class="badge-active">in use</span>
-      <button class="btn-icon btn-rename" title="Renombrar" aria-label="Renombrar">
+      <span class="badge-active" data-i18n="inUse">in use</span>
+      <button class="btn-icon btn-rename">
         <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-edit"/></svg>
       </button>
-      <button class="btn-icon btn-remove" title="Quitar del dashboard" aria-label="Quitar del dashboard">
+      <button class="btn-icon btn-remove">
         <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-close"/></svg>
       </button>
 
       <!-- Inline confirmation: a destructive step deserves a second beat, not a modal
            that steals focus from the whole page for one row. -->
       <div class="confirm" hidden>
-        <span class="confirm-q">¿quitar?</span>
-        <button class="btn btn-danger btn-yes">sí</button>
-        <button class="btn btn-no">no</button>
+        <span class="confirm-q" data-i18n="remove.q">¿quitar?</span>
+        <button class="btn btn-danger btn-yes" data-i18n="yes">sí</button>
+        <button class="btn btn-no" data-i18n="no">no</button>
       </div>
     </div>
 
