@@ -1,4 +1,4 @@
-// LLMSwaper frontend. No framework, no CDN, no build.
+// LLMSwapper frontend. No framework, no CDN, no build.
 
 // The usage endpoint allows roughly 5 requests per 5 minutes for the WHOLE app. What actually
 // bounds our request rate is the server-side floor (MIN_GAP_MS, 80s between ANY two outbound
@@ -209,11 +209,11 @@ let targetList = [{ id: 'host', label: 'host', kind: 'host', activeId: null, run
 // mean re-picking your WSL distro all day; falls back to the host when the remembered one is
 // gone (a distro stopped, or WSL removed).
 let selectedTarget = (() => {
-  try { return localStorage.getItem('swaper.target') || 'host'; } catch { return 'host'; }
+  try { return localStorage.getItem('swapper.target') || 'host'; } catch { return 'host'; }
 })();
 function selectTarget(id) {
   selectedTarget = id;
-  try { localStorage.setItem('swaper.target', id); } catch { /* private window: not worth failing over */ }
+  try { localStorage.setItem('swapper.target', id); } catch { /* private window: not worth failing over */ }
   render();
 }
 
@@ -233,7 +233,7 @@ function applyI18n(root = document) {
 function setLang(next) {
   lang = next;
   document.documentElement.lang = next;
-  try { localStorage.setItem('swaper.lang', next); } catch { /* ventana privada: no vale fallar por esto */ }
+  try { localStorage.setItem('swapper.lang', next); } catch { /* ventana privada: no vale fallar por esto */ }
   for (const b of $$('#switch-lang button')) b.setAttribute('aria-pressed', String(b.dataset.lang === next));
   applyI18n();
   render(); // las filas llevan textos construidos en JS, no solo data-i18n
@@ -241,7 +241,7 @@ function setLang(next) {
 
 function setTheme(next) {
   document.documentElement.dataset.theme = next;
-  try { localStorage.setItem('swaper.theme', next); } catch { /* idem */ }
+  try { localStorage.setItem('swapper.theme', next); } catch { /* idem */ }
   for (const b of $$('#switch-theme button')) b.setAttribute('aria-pressed', String(b.dataset.theme === next));
 }
 
@@ -250,7 +250,7 @@ function setTheme(next) {
 async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(path, {
     method,
-    headers: { 'X-Swaper': '1', ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { 'X-Swapper': '1', ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();

@@ -20,7 +20,7 @@ const HOST = '127.0.0.1';
 // Where the socket actually binds. Loopback everywhere except inside a container, where the
 // Dockerfile sets 0.0.0.0. The loopback guarantee then moves outward, to how the port is
 // published:  -p 127.0.0.1:7373:7373  - see the README.
-const BIND = process.env.SWAPER_BIND || HOST;
+const BIND = process.env.SWAPPER_BIND || HOST;
 const BASE_PORT = Number(process.env.PORT) || 7373;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_BODY = 1024 * 1024;
@@ -84,7 +84,7 @@ function readBody(req) {
 // browser really does connect to this socket. What gives it away is the Host header - it says
 // "evil.com", because the browser fills it from the URL the page used. A hostname check catches
 // that; the port never entered into it. An ordinary cross-origin fetch is stopped twice over,
-// by the Origin check below and by the X-Swaper header a cross-site request cannot set.
+// by the Origin check below and by the X-Swapper header a cross-site request cannot set.
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
 /** "127.0.0.1:27387" -> "127.0.0.1", "[::1]:7373" -> "[::1]". Empty when unparseable. */
@@ -109,8 +109,8 @@ function guard(req, res, pathname) {
     if (!ok) { fail(res, 403, 'Origen no permitido'); return false; }
   }
   // Static assets are exempt: the browser loads /style.css with no say in its headers.
-  if (pathname.startsWith('/api/') && req.headers['x-swaper'] !== '1') {
-    fail(res, 403, 'Falta la cabecera X-Swaper'); return false;
+  if (pathname.startsWith('/api/') && req.headers['x-swapper'] !== '1') {
+    fail(res, 403, 'Falta la cabecera X-Swapper'); return false;
   }
   return true;
 }
@@ -416,7 +416,7 @@ function listen(port) {
     // running on 7374 would double the outbound rate and rate-limit both of them.
     if (err.code === 'EADDRINUSE') {
       const url = `http://${HOST}:${port}`;
-      console.log(`\n  Ya hay algo escuchando en ${url} - probablemente otro LLMSwaper.`);
+      console.log(`\n  Ya hay algo escuchando en ${url} - probablemente otro LLMSwapper.`);
       console.log(`  Ábrelo ahí, o arranca en otro puerto:  PORT=7400 node server.js\n`);
       if (!process.env.NO_OPEN) oauth.openBrowser(url);
       process.exit(0);
@@ -426,7 +426,7 @@ function listen(port) {
   });
   server.listen(port, BIND, () => {
     const url = `http://${HOST}:${port}`;
-    console.log(`\n  LLMSwaper  ->  ${url}`);
+    console.log(`\n  LLMSwapper  ->  ${url}`);
     console.log(`  datos: ${P.dataDir()}`);
     // Inherited from the shell, this silently redirects every read and write to a throwaway
     // config - and the README teaches people to set it for an isolated login.

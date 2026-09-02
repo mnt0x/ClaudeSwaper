@@ -1,6 +1,6 @@
-# LLMSwaper - internals
+# LLMSwapper - internals
 
-Notes on how Claude Code stores its session, and what LLMSwaper does with it.
+Notes on how Claude Code stores its session, and what LLMSwapper does with it.
 Everything here was verified empirically against a live installation, not inferred.
 
 Zero dependencies. Node >= 18 (global `fetch`). No build step.
@@ -219,7 +219,7 @@ The image is Linux; the host may be anything. What crosses the container boundar
 not is the whole of the design here, and the app is expected to say which is which rather than
 degrade quietly.
 
-`paths.inContainer()` is the switch, and it reads two signals: `SWAPER_IN_CONTAINER=1`, set by
+`paths.inContainer()` is the switch, and it reads two signals: `SWAPPER_IN_CONTAINER=1`, set by
 our own Dockerfile, and `/.dockerenv` for an image someone built by hand. Podman and some
 Kubernetes runtimes create neither, which is exactly why the env var exists.
 
@@ -236,7 +236,7 @@ On macOS there is a third: credentials live in the login Keychain, reached throu
 binary, which a Linux container cannot call. `credentials.read()` falls back to the plain file,
 so swapping works there only if the user has one.
 
-`SWAPER_BIND` splits the bind address from the browser-facing host. Inside a container the socket
+`SWAPPER_BIND` splits the bind address from the browser-facing host. Inside a container the socket
 has to listen on `0.0.0.0` to be reachable at all, so the loopback guarantee moves outward, to
 publishing the port as `127.0.0.1:<port>:7373`. The server says so on start-up when the two
 differ, because a bind widened by accident is not visible from the panel.
@@ -326,7 +326,7 @@ NormalizedUsage:
     // from the header probe: the same shape plus viaProbe:true, scoped:[] and opus/extraUsage null
     //   - see "Quota from the rate-limit headers"
 
-Guards: loopback bind, `Host` validated, cross-site `Origin` rejected, `X-Swaper: 1` required
+Guards: loopback bind, `Host` validated, cross-site `Origin` rejected, `X-Swapper: 1` required
 on **every `/api/` request, GET included**, static serving confined to `public/`. Anything
 matching `sk-ant-[A-Za-z0-9_-]+` is scrubbed before it can reach a log or a response body.
 

@@ -19,7 +19,7 @@ function check(name, fn) {
   }
 }
 
-console.log('\nLLMSwaper self-check\n');
+console.log('\nLLMSwapper self-check\n');
 
 for (const mod of ['lib/paths.js', 'lib/store.js', 'lib/usage.js', 'lib/swap.js', 'lib/credentials.js', 'lib/targets.js']) {
   check(`${mod} module self-check`, () => {
@@ -34,13 +34,13 @@ const oauth = require('./lib/oauth');
 
 // The usage cache is written to disk, so without this the suite would trample the real
 // data/usage-cache.json - including, now that it is persisted, the rate-limit cooldown.
-const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-data-'));
+const SANDBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-data-'));
 P.dataDir = () => SANDBOX;
 P.backupsDir = () => path.join(SANDBOX, 'backups');
 P.accountsPath = () => path.join(SANDBOX, 'accounts.json');
 
 check('atomic write survives a corrupt-target refusal', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-t-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-t-'));
   const f = path.join(tmp, 'x.json');
   P.writeJsonAtomic(f, { a: 1 });
   assert.deepStrictEqual(P.readJsonFile(f), { a: 1 });
@@ -51,7 +51,7 @@ check('atomic write survives a corrupt-target refusal', () => {
 });
 
 check('writeJsonAtomic refuses to write a non-object as a whole config', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-t-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-t-'));
   assert.throws(() => P.writeJsonAtomic(path.join(tmp, 'y.json'), undefined), /empty JSON/);
   fs.rmSync(tmp, { recursive: true, force: true });
 });
@@ -92,7 +92,7 @@ check('normalize() handles the verified payload, legacy-only, and all-null', () 
 });
 
 check('swap preserves every unrelated key in a realistic .claude.json', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-cfg-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-cfg-'));
   const cj = path.join(tmp, '.claude.json');
   const original = {
     numStartups: 7,
@@ -121,7 +121,7 @@ check('swap preserves every unrelated key in a realistic .claude.json', () => {
 });
 
 check('swap refuses to touch a config it cannot parse', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-bad-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-bad-'));
   const bad = path.join(tmp, '.claude.json');
   fs.writeFileSync(bad, 'not json at all');
   assert.throws(() => swapLib.writeClaudeJson(bad, { accountUuid: 'x' }));
@@ -133,7 +133,7 @@ check('credentials round-trip through the file backend', () => {
   // CLAUDE_CONFIG_DIR redirects paths.credentialsPath(), so this never touches the
   // real credentials. On macOS the Keychain path is preferred but falls back to the
   // file when no Keychain item exists - which is exactly this situation.
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-cred-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-cred-'));
   const previous = process.env.CLAUDE_CONFIG_DIR;
   process.env.CLAUDE_CONFIG_DIR = tmp;
   try {
@@ -172,7 +172,7 @@ check('the macOS branch degrades to the file backend instead of crashing', () =>
   // Forces the darwin path on whatever this really is. Where `security` does not exist
   // (or holds no item) the Keychain read must fail soft and fall back to the file -
   // this is the closest thing to macOS coverage without a Mac.
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-darwin-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-darwin-'));
   const realPlatform = process.platform;
   const previousDir = process.env.CLAUDE_CONFIG_DIR;
   process.env.CLAUDE_CONFIG_DIR = tmp;
@@ -200,7 +200,7 @@ check('the macOS branch degrades to the file backend instead of crashing', () =>
 check('el keep-alive solo sincroniza la sesión viva si sigue siendo de esa cuenta', () => {
   // Regresión: el keep-alive escribía por RUTA (saltándose el Keychain en macOS) y decidía
   // por activeId, que durante un swap va por detrás de la realidad varios segundos.
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-sync-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-sync-'));
   const previous = process.env.CLAUDE_CONFIG_DIR;
   process.env.CLAUDE_CONFIG_DIR = tmp;
   try {
@@ -238,7 +238,7 @@ check('el store adopta el par que Claude Code rotó por su cuenta, y solo si sab
   // Claude Code renueva su propia sesión y el refresh rota: el par vivo avanza y la copia
   // del store muere. Sin esto, semanas después el keep-alive fallaba con invalid_grant y
   // la cuenta solo se recuperaba con un login, que es justo lo que la app evita.
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-adopt-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-adopt-'));
   const previous = process.env.CLAUDE_CONFIG_DIR;
   process.env.CLAUDE_CONFIG_DIR = tmp;
   const store = require('./lib/store');
@@ -284,7 +284,7 @@ check('el store adopta el par que Claude Code rotó por su cuenta, y solo si sab
 check('un swap a un target de fichero (WSL) escribe en SUS ficheros, no en los del host', () => {
   // Un target WSL es exactamente esto: fileBackend + dos rutas propias. Simulado con un
   // directorio temporal - misma mecánica que las rutas UNC \\wsl.localhost\... reales.
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-wsl-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-wsl-'));
   const target = {
     id: 'wsl:test', kind: 'wsl', label: 'WSL · test',
     claudeJsonPath: path.join(tmp, '.claude.json'),
@@ -325,7 +325,7 @@ check('un swap a un target de fichero (WSL) escribe en SUS ficheros, no en los d
 });
 
 check('el rollback restaura ~/.claude.json con escritura atómica, no copyFileSync', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-rb-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-rb-'));
   const previous = process.env.CLAUDE_CONFIG_DIR;
   process.env.CLAUDE_CONFIG_DIR = tmp;
   try {
@@ -364,7 +364,7 @@ check('el suelo de ritmo deja como mucho 4 peticiones en la ventana de 300 s', (
 check('hardenDataDir deja constancia aunque icacls falle', () => {
   // ponytail: fuera de Windows la función no hace nada, así que no hay nada que probar.
   if (process.platform !== 'win32') return;
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-acl-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-acl-'));
   const realRoot = process.env.SystemRoot;
   process.env.SystemRoot = path.join(tmp, 'no-such-windows');
   try {
@@ -416,7 +416,7 @@ async function checkAsync(name, fn) {
 }
 
 (async () => {
-  await checkAsync('la cabecera X-Swaper es obligatoria en toda la API, GET incluido', async () => {
+  await checkAsync('la cabecera X-Swapper es obligatoria en toda la API, GET incluido', async () => {
     // Un <img src="http://127.0.0.1:7373/api/health"> desde cualquier web pasaba las tres
     // guardas: sin Origin, método GET, y Host correcto. Cada llamada lanza un tasklist.
     const server = require('./server');
@@ -430,7 +430,7 @@ async function checkAsync(name, fn) {
       const base = `http://127.0.0.1:${PORT}`;
       assert.strictEqual((await fetch(`${base}/api/health`)).status, 403, 'GET a la API sin cabecera');
       assert.strictEqual((await fetch(`${base}/api/accounts`)).status, 403, 'GET a la API sin cabecera');
-      assert.strictEqual((await fetch(`${base}/api/health`, { headers: { 'X-Swaper': '1' } })).status, 200);
+      assert.strictEqual((await fetch(`${base}/api/health`, { headers: { 'X-Swapper': '1' } })).status, 200);
       assert.strictEqual((await fetch(`${base}/style.css`)).status, 200, 'los estáticos no pueden exigirla');
     } finally {
       await new Promise((resolve) => s.close(resolve));
@@ -768,7 +768,7 @@ async function checkAsync(name, fn) {
   });
 
   check('writeCredentials no escribe el centinela de token muerto ni deja los scopes vacíos', () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-tok-'));
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-tok-'));
     try {
       const f = path.join(tmp, '.credentials.json');
       fs.writeFileSync(f, JSON.stringify({ mcpOAuth: { keep: 1 } }));
@@ -789,7 +789,7 @@ async function checkAsync(name, fn) {
   });
 
   check('clearClaudeJsonIdentity borra la identidad anterior y respeta todo lo demás', () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-cid-'));
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-cid-'));
     try {
       const f = path.join(tmp, '.claude.json');
       fs.writeFileSync(f, JSON.stringify({
@@ -863,13 +863,13 @@ async function checkAsync(name, fn) {
       assert.strictEqual(ident.accountUuid, null, 'no se puede inventar un accountUuid');
       // Nombrar el panel, en vez de dejarlo vacío: si se deja null, Claude Code se inventa
       // "<nombre>'s Organization", que se lee como una organización real a la que perteneces.
-      assert.strictEqual(ident.organizationName, 'LLMSwaper');
+      assert.strictEqual(ident.organizationName, 'LLMSwapper');
       assert.strictEqual(ident.organizationUuid, null, 'no se puede inventar un uuid de organización');
     } finally { store.remove(a.id); }
   });
 
   check('el swap escribe esa identidad en ~/.claude.json y respeta el resto del fichero', () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-ident-'));
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swapper-ident-'));
     try {
       const f = path.join(tmp, '.claude.json');
       fs.writeFileSync(f, JSON.stringify({
@@ -890,9 +890,9 @@ async function checkAsync(name, fn) {
   });
 
   check('en un contenedor, "no veo los procesos" no se reporta como "no hay procesos"', () => {
-    const antes = process.env.SWAPER_IN_CONTAINER;
+    const antes = process.env.SWAPPER_IN_CONTAINER;
     try {
-      process.env.SWAPER_IN_CONTAINER = '1';
+      process.env.SWAPPER_IN_CONTAINER = '1';
       assert.strictEqual(P.inContainer(), true);
       const r = swapLib.detectClaudeProcesses();
       // running:false a secas sería una mentira con cara de certeza: el panel diría que Claude
@@ -900,21 +900,21 @@ async function checkAsync(name, fn) {
       assert.strictEqual(r.unknown, true, 'debe admitir que no puede saberlo');
       assert.deepStrictEqual(r.pids, []);
     } finally {
-      if (antes === undefined) delete process.env.SWAPER_IN_CONTAINER;
-      else process.env.SWAPER_IN_CONTAINER = antes;
+      if (antes === undefined) delete process.env.SWAPPER_IN_CONTAINER;
+      else process.env.SWAPPER_IN_CONTAINER = antes;
     }
   });
 
   check('fuera de un contenedor la detección sigue siendo real', () => {
-    const antes = process.env.SWAPER_IN_CONTAINER;
+    const antes = process.env.SWAPPER_IN_CONTAINER;
     try {
-      delete process.env.SWAPER_IN_CONTAINER;
+      delete process.env.SWAPPER_IN_CONTAINER;
       assert.strictEqual(P.inContainer(), false, 'sin la variable y sin /.dockerenv');
       const r = swapLib.detectClaudeProcesses();
       assert.strictEqual(r.unknown, undefined, 'aquí sí se puede mirar, así que no hay excusa');
       assert.ok(Array.isArray(r.pids));
     } finally {
-      if (antes !== undefined) process.env.SWAPER_IN_CONTAINER = antes;
+      if (antes !== undefined) process.env.SWAPPER_IN_CONTAINER = antes;
     }
   });
 
@@ -930,7 +930,7 @@ async function checkAsync(name, fn) {
       const pedir = (headers) => new Promise((resolve, reject) => {
         const req = http.request({
           host: '127.0.0.1', port: 7996, path: '/api/health', method: 'GET',
-          headers: { 'X-Swaper': '1', ...headers },
+          headers: { 'X-Swapper': '1', ...headers },
         }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
         req.on('error', reject);
         req.end();
@@ -939,7 +939,7 @@ async function checkAsync(name, fn) {
       // Un dominio que resuelve a 127.0.0.1 hace que el navegador SÍ conecte con este socket;
       // lo que le delata es que la cabecera Host lleva su dominio, no el loopback.
       assert.strictEqual(await pedir({ Host: 'evil.example' }), 403, 'DNS rebinding debe caer');
-      assert.strictEqual(await pedir({ Host: 'llmswaper.local' }), 403);
+      assert.strictEqual(await pedir({ Host: 'llmswapper.local' }), 403);
 
       // El puerto NO se valida: al publicar el contenedor con -p el navegador manda el puerto
       // externo, que este proceso no puede conocer. Exigirlo rechazaba todo uso en Docker.
@@ -964,7 +964,7 @@ async function checkAsync(name, fn) {
       const post = async (body) => {
         const res = await realFetch('http://127.0.0.1:7998/api/accounts/token', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Swaper': '1' },
+          headers: { 'Content-Type': 'application/json', 'X-Swapper': '1' },
           body: JSON.stringify(body),
         });
         return { status: res.status, body: await res.json() };
@@ -998,7 +998,7 @@ async function checkAsync(name, fn) {
       const patch = async (id, body) => {
         const res = await realFetch(`http://127.0.0.1:7997/api/accounts/${id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-Swaper': '1' },
+          headers: { 'Content-Type': 'application/json', 'X-Swapper': '1' },
           body: JSON.stringify(body),
         });
         return { status: res.status, body: await res.json() };

@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LLMSwaper</title>
+<title>LLMSwapper</title>
 <meta name="color-scheme" content="dark light">
 <link rel="stylesheet" href="/style.css">
 <!-- Tema antes de pintar: leerlo aqui, sincrono, evita el fogonazo oscuro de un cuadro entero
      cuando la preferencia guardada es clara. Es la unica razon por la que hay JS en el head. -->
 <script>
   try {
-    var t = localStorage.getItem('swaper.theme');
+    var t = localStorage.getItem('swapper.theme');
     if (!t) t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
     document.documentElement.dataset.theme = t;
-    var l = localStorage.getItem('swaper.lang');
+    var l = localStorage.getItem('swapper.lang');
     if (!l) l = (navigator.language || 'es').toLowerCase().startsWith('es') ? 'es' : 'en';
     document.documentElement.lang = l;
   } catch (e) { document.documentElement.dataset.theme = 'dark'; }
@@ -66,12 +66,12 @@
 
 <header class="masthead">
   <div class="identity">
-    <!-- Logo de LLMSwaper: las dobles flechas #i-swap como traza viva de osciloscopio
+    <!-- Logo de LLMSwapper: las dobles flechas #i-swap como traza viva de osciloscopio
          dentro de un pin con su mini-rejilla. Un punto de luz la recorre (app.js). -->
     <div class="scope-pin" aria-hidden="true">
       <svg class="scope-logo" viewBox="0 0 18 18" focusable="false"><use class="logo-base" href="#i-swap"/><use class="logo-trace" id="logo-swap" href="#i-swap"/></svg>
     </div>
-    <h1>Swaper</h1>
+    <h1>Swapper</h1>
   </div>
 
   <div class="toolbar">
