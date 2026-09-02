@@ -16,6 +16,10 @@ let swapping = false;
 // AbortController of the row confirmation currently open, if any. Also doubles as "a
 // destructive question is on screen", which the keyboard shortcuts must not talk over.
 let openConfirm = null;
+// Which environment the dashboard is acting on: 'host' or 'wsl:<distro>'. The account list
+// is shared; only the active marker and where a swap writes change with it.
+let currentTarget = 'host';
+let targetList = [];
 
 /* ---------------- transport ---------------- */
 
@@ -262,7 +266,7 @@ async function doSwap(id, button) {
   button.classList.add('is-loading');
 
   try {
-    const result = await api('/api/swap', { method: 'POST', body: { id } });
+    const result = await api('/api/swap', { method: 'POST', body: { id, target: currentTarget } });
     toast(`Cuenta activa: ${result.account.label}`, 'ok');
     for (const w of result.warnings || []) toast(w);
     // The swap already fetched this account's usage to verify the token; the server
@@ -287,7 +291,7 @@ async function importCurrent(configDir) {
   buttons.forEach((b) => { b.disabled = true; b.classList.add('is-loading'); });
   try {
     const result = await api('/api/accounts/import', {
-      method: 'POST', body: configDir ? { configDir } : {},
+      method: 'POST', body: { target: currentTarget, ...(configDir ? { configDir } : {}) },
     });
     toast(`Importada: ${result.account.email}`, 'ok');
     await refresh(false);
@@ -313,20 +317,69 @@ function scheduleQueuedRetry() {
   queuedRetry = setTimeout(() => { if (!swapping) refresh(false); }, (Math.min(...waits) + 2) * 1000);
 }
 
+// The environment selector. Only shows once there is more than one place to swap — on a
+// machine without WSL it is a single 'host' and stays hidden.
+function renderTargets() {
+  const el = $('#targets');
+  if (!el) return;
+  if (targetList.length < 2) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = '';
+  for (const t of targetList) {
+    const b = document.createElement('button');
+    b.className = 'target-btn' + (t.id === currentTarget ? ' is-current' : '');
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(t.id === currentTarget));
+    b.title = t.running ? `Claude Code está abierto en ${t.label}` : t.label;
+    b.append(document.createTextNode(t.label));
+    if (t.running) {
+      const dot = document.createElement('span');
+      dot.className = 'target-run';
+      dot.setAttribute('aria-hidden', 'true');
+      b.append(dot);
+    }
+    b.addEventListener('click', () => {
+      if (currentTarget === t.id) return;
+      currentTarget = t.id;
+      renderTargets();
+      refresh(false);
+    });
+    el.append(b);
+  }
+}
+
+function currentTargetInfo() {
+  return targetList.find((t) => t.id === currentTarget) || null;
+}
+
 async function refresh(force = false) {
   const btn = $('#btn-refresh');
   btn.disabled = true;
   btn.classList.add('is-loading');
   try {
-    const data = await api('/api/accounts');
+    const t = await api('/api/targets').catch(() => null);
+    if (t && Array.isArray(t.targets)) {
+      targetList = t.targets;
+      if (!targetList.some((x) => x.id === currentTarget)) currentTarget = 'host';
+      renderTargets();
+    }
+
+    const data = await api(`/api/accounts?target=${encodeURIComponent(currentTarget)}`);
     accounts = data.accounts;
     usageById = accounts.length ? await api(`/api/usage/all${force ? '?force=1' : ''}`) : {};
     lastFetch = Date.now();
     $('#banner-offline').hidden = true;
     scheduleQueuedRetry();
 
-    const health = await api('/api/health').catch(() => null);
-    $('#banner-running').hidden = !(health && health.claudeRunning);
+    // "Claude Code abierto" reflects the SELECTED environment, not always the host.
+    const info = currentTargetInfo();
+    const running = info ? info.running : false;
+    const banner = $('#banner-running');
+    if (running) {
+      const where = info && info.kind === 'wsl' ? ` en ${info.label}` : '';
+      $('p', banner).innerHTML = `Claude Code está abierto${where}. El cambio se aplica a las sesiones <strong>nuevas</strong>: ciérralo y vuelve a abrirlo.`;
+    }
+    banner.hidden = !running;
 
     render();
   } catch (err) {

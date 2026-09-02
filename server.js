@@ -11,6 +11,7 @@ const oauth = require('./lib/oauth');
 const usage = require('./lib/usage');
 const swap = require('./lib/swap');
 const credentials = require('./lib/credentials');
+const targets = require('./lib/targets');
 
 const HOST = '127.0.0.1';
 const BASE_PORT = Number(process.env.PORT) || 7373;
@@ -118,7 +119,33 @@ async function handleApi(req, res, url, port) {
     });
   }
 
-  if (pathname === '/api/accounts' && method === 'GET') return send(res, 200, store.publicView());
+  // Environments a swap can target: the host, plus any WSL distro with Claude installed.
+  // Each reports which account is active there and whether Claude is running in it.
+  if (pathname === '/api/targets' && method === 'GET') {
+    const force = url.searchParams.get('force') === '1';
+    const list = targets.list({ force });
+    return send(res, 200, {
+      targets: list.map((t) => ({
+        id: t.id,
+        kind: t.kind,
+        label: t.label,
+        activeId: store.activeFor(t.id) || swap.detectActiveId(t.id, store),
+        running: targets.detectRunning(t).running,
+      })),
+    });
+  }
+
+  if (pathname === '/api/accounts' && method === 'GET') {
+    const targetId = url.searchParams.get('target') || 'host';
+    const view = store.publicView(targetId);
+    // If we have never swapped on this target, show its REAL current account as in-use by
+    // reading that environment's live config. A display hint only; nothing is written.
+    if (!view.activeId) {
+      const det = swap.detectActiveId(targetId, store);
+      if (det) { view.activeId = det; for (const a of view.accounts) a.isActive = a.id === det; }
+    }
+    return send(res, 200, view);
+  }
 
   if (pathname === '/api/usage/all' && method === 'GET') {
     const force = url.searchParams.get('force') === '1';
@@ -132,34 +159,37 @@ async function handleApi(req, res, url, port) {
   }
 
   if (pathname === '/api/swap' && method === 'POST') {
-    const { id } = await readBody(req);
+    const { id, target } = await readBody(req);
     if (!id) return fail(res, 400, 'Falta el id de cuenta');
     try {
-      return send(res, 200, await swap.swapTo(id, deps));
+      return send(res, 200, await swap.swapTo(id, deps, target));
     } catch (err) {
       return fail(res, 500, err.message);
     }
   }
 
   if (pathname === '/api/swap/dryrun' && method === 'POST') {
-    const { id } = await readBody(req);
-    try { return send(res, 200, await swap.dryRun(id, deps)); }
+    const { id, target } = await readBody(req);
+    try { return send(res, 200, await swap.dryRun(id, deps, target)); }
     catch (err) { return fail(res, 400, err.message); }
   }
 
   if (pathname === '/api/accounts/import' && method === 'POST') {
-    const { configDir } = await readBody(req);
-    const identity = swap.readCurrentIdentity(configDir);
+    const { configDir, target } = await readBody(req);
+    const tgId = target || 'host';
+    const identity = swap.readCurrentIdentity(configDir, tgId);
     if (!identity) {
+      const tg = targets.resolve(tgId);
+      const where = tg && tg.kind === 'wsl' ? ` en ${tg.label}` : '';
       return fail(res, 400, configDir
         ? `No se encontró ninguna sesión en ${configDir}`
-        : 'No hay ninguna sesión de Claude Code activa que importar. Ejecuta "claude", haz /login y vuelve a pulsar import.');
+        : `No hay ninguna sesión de Claude Code activa que importar${where}. Ejecuta "claude", haz /login y vuelve a pulsar import.`);
     }
     try {
       const account = await adoptTokens(identity.oauth, identity.userID);
-      // Only the live config reflects the account actually in use.
-      if (!configDir) store.setActive(account.id);
-      return send(res, 200, { ok: true, account: store.publicAccount(account.id) });
+      // The live config of that target reflects the account actually in use there.
+      if (!configDir) store.setActive(account.id, tgId);
+      return send(res, 200, { ok: true, account: store.publicAccount(account.id, tgId) });
     } catch (err) {
       return fail(res, 502, `No se pudo verificar la cuenta actual: ${err.message}`);
     }

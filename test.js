@@ -21,7 +21,7 @@ function check(name, fn) {
 
 console.log('\nClaudeSwaper self-check\n');
 
-for (const mod of ['lib/paths.js', 'lib/store.js', 'lib/usage.js', 'lib/swap.js', 'lib/credentials.js']) {
+for (const mod of ['lib/paths.js', 'lib/store.js', 'lib/usage.js', 'lib/swap.js', 'lib/credentials.js', 'lib/targets.js']) {
   check(`${mod} module self-check`, () => {
     execFileSync(process.execPath, [path.join(__dirname, mod)], { stdio: 'pipe', timeout: 30000 });
   });
@@ -279,6 +279,49 @@ check('el store adopta el par que Claude Code rotó por su cuenta, y solo si sab
     fs.rmSync(P.accountsPath(), { force: true });
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+check('un swap a un target de fichero (WSL) escribe en SUS ficheros, no en los del host', () => {
+  // Un target WSL es exactamente esto: fileBackend + dos rutas propias. Simulado con un
+  // directorio temporal — misma mecánica que las rutas UNC \\wsl.localhost\... reales.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'swaper-wsl-'));
+  const target = {
+    id: 'wsl:test', kind: 'wsl', label: 'WSL · test',
+    claudeJsonPath: path.join(tmp, '.claude.json'),
+    credentialsPath: path.join(tmp, '.claude', '.credentials.json'),
+    fileBackend: true,
+  };
+  fs.mkdirSync(path.join(tmp, '.claude'));
+  fs.writeFileSync(target.credentialsPath, JSON.stringify({
+    mcpOAuth: { 'srv|1': { accessToken: 'keep' } },
+    claudeAiOauth: { accessToken: 'OLD', refreshToken: 'OLDR', expiresAt: 1, scopes: [] },
+  }, null, 2));
+  fs.writeFileSync(target.claudeJsonPath, JSON.stringify({
+    userID: 'WSL-INSTALL-ID', projects: { '/x': { history: [1] } },
+    oauthAccount: { emailAddress: 'old@wsl', accountUuid: 'old-uuid' },
+    modelAccessCache: [1],
+  }, null, 2));
+
+  swapLib.writeCredentials(target, { accessToken: 'NEW', refreshToken: 'NEWR', expiresAt: 2, scopes: ['s'], subscriptionType: 'max' });
+  swapLib.writeClaudeJson(target.claudeJsonPath, { accountUuid: 'new-uuid', emailAddress: 'new@wsl', displayName: 'N' });
+
+  const cred = JSON.parse(fs.readFileSync(target.credentialsPath, 'utf8'));
+  assert.strictEqual(cred.claudeAiOauth.accessToken, 'NEW', 'la credencial del target se actualiza');
+  assert.strictEqual(cred.mcpOAuth['srv|1'].accessToken, 'keep', 'mcpOAuth del target sobrevive');
+  const cj = JSON.parse(fs.readFileSync(target.claudeJsonPath, 'utf8'));
+  assert.strictEqual(cj.oauthAccount.emailAddress, 'new@wsl');
+  assert.strictEqual(cj.userID, 'WSL-INSTALL-ID', 'userID del target intacto');
+  assert.ok(!('modelAccessCache' in cj), 'caché stale del target descartada');
+
+  // Backup + restore contra ese mismo target vuelve a dejarlo como estaba.
+  const backup = swapLib.backupNow('acc_x', target);
+  swapLib.writeClaudeJson(target.claudeJsonPath, { accountUuid: 'z', emailAddress: 'z@z', displayName: 'Z' });
+  swapLib.restoreFrom(backup.dir, target);
+  const back = JSON.parse(fs.readFileSync(target.claudeJsonPath, 'utf8'));
+  assert.strictEqual(back.oauthAccount.emailAddress, 'new@wsl', 'restore del target vuelve al estado respaldado');
+
+  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.rmSync(backup.dir, { recursive: true, force: true });
 });
 
 check('el rollback restaura ~/.claude.json con escritura atómica, no copyFileSync', () => {

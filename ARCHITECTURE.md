@@ -146,6 +146,35 @@ so on macOS it lands in the Keychain rather than in a file Claude Code never rea
 
 ---
 
+## Targets: host and WSL
+
+A **target** is where a swap writes. `lib/targets.js` enumerates them:
+
+- `host` — the machine the server runs on, through its credentials backend (Keychain on
+  macOS, file elsewhere).
+- `wsl:<distro>` — a WSL distro that has Claude installed, reached over its file share:
+  `\\wsl.localhost\<distro>\home\<user>\.claude.json` and `…\.claude\.credentials.json`.
+  WSL is Linux, so it is always the plain-file backend. Detection runs `wsl.exe -l -q`,
+  reads each distro's `$HOME`, and includes it only if `~/.claude.json` is reachable over
+  the share — which simultaneously proves the distro is running and that Claude lives there.
+  Detection is cached ~30s (it spawns several `wsl.exe` calls) and only happens on Windows.
+
+The OAuth tokens are identical in every environment, so the **account store is shared**;
+what differs per target is which account is *active* (`store.active` is a map keyed by
+target id, migrated from the old single `activeId`) and which files a swap rewrites. A swap
+is otherwise byte-for-byte the same operation — backup, in-place mutation, verify, roll
+back — pointed at the target's two paths. `wsl.exe` is addressed absolutely from
+`%SystemRoot%\System32` (falling back to `Sysnative`) because it is not always on the PATH
+a spawned Node process sees.
+
+A target's active account is read from the store; if we have never swapped there, it is
+detected live from that environment's `oauthAccount.accountUuid`, so a freshly-opened WSL
+shows its real current account as "in use" without a write. Windows-side writes over the
+share cannot carry Linux `0600` bits — the files stay inside the WSL user's own home, which
+is already user-scoped.
+
+---
+
 ## Data store: `data/accounts.json`
 
     { "version": 1, "activeId": "acc_ab12cd", "accounts": [ {
@@ -165,14 +194,18 @@ only shape allowed to reach the browser; it strips `oauth` and `userID`.
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/api/health` | `{ok, claudeRunning, pids, node, platform, credentialsBackend, paths}` |
-| GET | `/api/accounts` | `{activeId, accounts:[...]}` — token fields stripped |
+| GET | `/api/targets` | `{targets:[{id, kind, label, activeId, running}]}` — host + each WSL distro |
+| GET | `/api/accounts?target=` | `{activeId, accounts:[...]}` for that target — token fields stripped |
 | GET | `/api/usage/all` | `{ "<id>": NormalizedUsage }`, sequential, failures isolated |
 | GET | `/api/usage?id=` | `NormalizedUsage` |
-| POST | `/api/swap` | `{id}` -> `{ok, verified, warnings[], backup, account}` |
-| POST | `/api/swap/dryrun` | `{id}` -> what would change, writes nothing |
-| POST | `/api/accounts/import` | `{configDir?}` -> `{ok, account}` |
+| POST | `/api/swap` | `{id, target?}` -> `{ok, verified, target, warnings[], backup, account}` |
+| POST | `/api/swap/dryrun` | `{id, target?}` -> what would change, writes nothing |
+| POST | `/api/accounts/import` | `{configDir?, target?}` -> `{ok, account}` |
 | PATCH | `/api/accounts/:id` | `{label?, color?}` |
 | DELETE | `/api/accounts/:id` | `{ok}` |
+
+`target` defaults to `host`. Usage is target-independent (the token is the same in any
+environment), so `/api/usage*` take no target.
 
 NormalizedUsage:
 

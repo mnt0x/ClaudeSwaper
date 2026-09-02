@@ -149,6 +149,24 @@ Pulsa **SWAP** en la fila que quieras. Por dentro:
 **El cambio se aplica a las sesiones NUEVAS de Claude Code.** Una sesión ya abierta mantiene su
 token en memoria: ciérrala y vuelve a abrirla.
 
+### Host y WSL
+
+Claude Code en WSL tiene su propia sesión, separada de la de Windows. Si tienes uno o más WSL
+con Claude instalado, aparece arriba un selector **host / WSL · &lt;distro&gt;**. Elige el entorno y
+pulsa **SWAP**: el cambio se aplica a los ficheros de ESE entorno. Así cambias de cuenta en WSL
+sin abrir la terminal, sin `wsl`, sin `claude`, sin `/login`.
+
+- Tus cuentas son las mismas en los dos entornos (el token es idéntico); solo cambia cuál está
+  activa en cada uno. Host y WSL son independientes: puedes tener una cuenta en Windows y otra
+  distinta en WSL a la vez.
+- ClaudeSwaper llega a WSL por su recurso compartido (`\\wsl.localhost\<distro>\...`), sin red. El
+  distro tiene que estar iniciado (basta con haberlo abierto una vez).
+- El **import** también respeta el selector: con WSL elegido, importa la cuenta con la que tienes
+  sesión ahora mismo en WSL.
+- El punto ámbar en el selector avisa de que Claude Code está abierto en ese entorno (el cambio
+  irá a sesiones nuevas, como en el host).
+- Solo Windows: en macOS/Linux no hay WSL, así que el selector no aparece.
+
 ---
 
 ## Por qué no vuelves a hacer login
@@ -276,7 +294,8 @@ importante— que el swap conserva todas las claves de `~/.claude.json`.
 También cubre lo que cuesta caro cuando se rompe: que el keep-alive solo sincroniza la sesión
 viva si sigue siendo de esa cuenta, que el rollback no puede dejar un `~/.claude.json` a medias,
 que el cooldown de un 429 sobrevive a reiniciar, que una cuenta con el token muerto no acapara
-el turno de consulta, y que la API entera exige la cabecera `X-Swaper` mientras los estáticos no.
+el turno de consulta, que la API entera exige la cabecera `X-Swaper` mientras los estáticos no,
+y que un swap a un target de tipo WSL escribe en los ficheros de ese entorno y no en los del host.
 
 ---
 

@@ -49,6 +49,8 @@
   </div>
 
   <div class="toolbar">
+    <!-- Entorno donde aplica el swap: host o un WSL. Lo rellena app.js; oculto si solo hay host. -->
+    <div class="targets" id="targets" role="group" aria-label="Entorno donde cambiar de cuenta" hidden></div>
     <span class="sync" id="sync" aria-live="polite"></span>
     <button class="btn" id="btn-refresh" title="Actualizar uso · R">
       <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-refresh"/></svg>

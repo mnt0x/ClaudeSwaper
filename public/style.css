@@ -175,6 +175,30 @@ code {
 
 .toolbar { display: flex; align-items: center; gap: 0.45rem; }
 
+/* Selector de entorno: host / WSL. Segmentado, mismo lenguaje que los botones. */
+.targets {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface-2); overflow: hidden;
+  margin-right: 0.35rem;
+}
+.target-btn {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font: inherit; font-size: 11.5px; font-weight: 500;
+  color: var(--text-3);
+  background: transparent; border: 0; cursor: pointer;
+  padding: 0.42rem 0.7rem; white-space: nowrap;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.target-btn + .target-btn { border-left: 1px solid var(--line); }
+.target-btn:hover { color: var(--text); background: #111c18; }
+.target-btn.is-current { color: var(--phos); background: var(--phos-dim); }
+/* Punto que marca que Claude Code corre en ese entorno (el swap irá a sesiones nuevas). */
+.target-run {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--warn); box-shadow: 0 0 7px rgba(255, 204, 77, 0.7);
+}
+
 .sync {
   font-size: 11.5px; color: var(--text-3);
   font-variant-numeric: tabular-nums;
