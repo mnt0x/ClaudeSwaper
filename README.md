@@ -4,7 +4,7 @@
 
 **Switch the active Claude Code account with one click — and see how much of each account's quota is left before you do.**
 
-[![test](https://github.com/mnt0x/ClaudeSwaper/actions/workflows/test.yml/badge.svg)](https://github.com/mnt0x/ClaudeSwaper/actions/workflows/test.yml)
+[![test](https://github.com/monac-cc/ClaudeSwaper/actions/workflows/test.yml/badge.svg)](https://github.com/monac-cc/ClaudeSwaper/actions/workflows/test.yml)
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](package.json)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](#docker)
@@ -66,7 +66,7 @@ I switch to right now*.
 ## Quick start
 
 ```bash
-git clone https://github.com/mnt0x/ClaudeSwaper.git
+git clone https://github.com/monac-cc/ClaudeSwaper.git
 cd ClaudeSwaper
 node server.js
 ```
