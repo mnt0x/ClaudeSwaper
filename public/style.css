@@ -49,11 +49,11 @@
    para los elementos de interfaz. Igual con los tres colores de severidad, elegidos oscuros para
    que un 97% siga leyendose de un vistazo y no como un pastel. */
 :root[data-theme="light"] {
-  --bg: #eef2f0;
+  --bg: #e6ebe9;
   --surface-1: #ffffff;
-  --surface-2: #f3f7f5;
-  --line: #dde7e2;
-  --line-strong: #c2d3cb;
+  --surface-2: #f1f5f3;
+  --line: #dae3df;
+  --line-strong: #b7c8c1;
 
   --text: #0b1a14;   /* 16.8:1 sobre surface-1 */
   --text-2: #3a564a; /*  8.1:1 */
@@ -68,7 +68,14 @@
   --crit: #c62139;
 
   --glow: rgba(0, 135, 90, 0.28);
-  --track: #dde7e2;
+  --track: #d6e0dc;
+
+  /* Sombra en dos capas: una linea de contacto de 1px y una difusa y elevada. Es lo que separa
+     una tarjeta de un rectangulo, y en claro no hay otra forma de decirlo - un fondo oscuro
+     insinua profundidad solo con un borde, uno claro no. El tono lleva el verde de la marca en
+     vez de negro puro: una sombra gris sobre un fondo verdoso se lee sucia. */
+  --lift-1: 0 1px 2px rgba(13, 38, 29, 0.055);
+  --lift-2: 0 12px 32px -18px rgba(13, 38, 29, 0.2);
 }
 
 /* Colores cableados para fondo oscuro que en claro dejan de funcionar. Se anulan aqui en vez de
@@ -89,7 +96,29 @@
 :root[data-theme="light"] .row.is-active { background: rgba(0, 135, 90, 0.05); }
 :root[data-theme="light"] .row.is-active .state-dot { box-shadow: 0 0 8px rgba(0, 135, 90, 0.55); }
 /* La sombra del panel esta calibrada sobre negro; en claro un 0.9 de negro parece suciedad. */
-:root[data-theme="light"] .panel { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 18px 40px -32px rgba(0, 0, 0, 0.35); }
+:root[data-theme="light"] .panel { box-shadow: var(--lift-1), var(--lift-2); }
+/* El filo rim-lit de fosforo es un gesto de pantalla oscura: sobre blanco no se lee como luz
+   rasante sino como un borde verdoso mal renderizado. En claro el borde de 1px y la sombra ya
+   dicen "esto es una tarjeta", que era su unico trabajo. */
+:root[data-theme="light"] .panel::after { display: none; }
+/* La lengueta activa se apoya en el panel, asi que comparte su lenguaje de sombra - pero solo
+   hacia arriba, para que el borde inferior siga fundiendose con el panel. */
+:root[data-theme="light"] .tab[aria-selected="true"] { box-shadow: 0 -1px 2px rgba(13, 38, 29, 0.05); }
+:root[data-theme="light"] .btn { box-shadow: var(--lift-1); }
+:root[data-theme="light"] .btn:active:not(:disabled) { box-shadow: none; }
+:root[data-theme="light"] .switch { box-shadow: var(--lift-1); }
+:root[data-theme="light"] .field-row { box-shadow: var(--lift-1), var(--lift-2); }
+:root[data-theme="light"] .toast { box-shadow: var(--lift-1), 0 16px 36px -20px rgba(13, 38, 29, 0.3); }
+
+/* La regla del encabezado marcaba tan poco que el titulo flotaba. Un pelo mas de peso y la
+   pagina gana una estructura: cabecera, contenido. */
+:root[data-theme="light"] .masthead { border-bottom-color: var(--line-strong); }
+
+/* El acento verde solo donde significa algo: fila activa y su canto. En claro el resplandor
+   difuso del modo oscuro se convierte en suciedad, asi que el canto se recorta y se satura. */
+:root[data-theme="light"] .row.is-active::before { box-shadow: none; }
+:root[data-theme="light"] .row.is-active .state-dot { box-shadow: 0 0 0 3px rgba(0, 135, 90, 0.15); }
+:root[data-theme="light"] .scope-pin { border-color: var(--line-strong); box-shadow: var(--lift-1); }
 :root[data-theme="light"] *::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
 
 /* La rampa de severidad tambien: los tres tonos claros pierden contraste sobre blanco. */
@@ -101,6 +130,15 @@
 /* El campo de brasas es aditivo sobre negro: sobre blanco no suma nada visible y solo ensucia.
    En claro el fondo es el fondo, sin ambiente. */
 :root[data-theme="light"] .field { display: none; }
+
+/* Sustituye al campo de brasas: un halo frio y amplio arriba, con el verde de la marca al 5%.
+   No se percibe como color, se percibe como que la pagina tiene profundidad. */
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(1200px 560px at 50% -14%, rgba(0, 135, 90, 0.055), transparent 68%),
+    var(--bg);
+  background-attachment: fixed;
+}
 
 /* La rejilla del pin del logo y los halos estan calibrados para fondo oscuro; en claro pesan
    demasiado, asi que se atenuan en vez de desaparecer. */
