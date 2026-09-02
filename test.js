@@ -861,7 +861,10 @@ async function checkAsync(name, fn) {
       assert.strictEqual(ident.displayName, 'Equipo');
       // Lo que NO sabemos de un token de solo inferencia se queda en null: nada inventado.
       assert.strictEqual(ident.accountUuid, null, 'no se puede inventar un accountUuid');
-      assert.strictEqual(ident.organizationName, null, 'no se puede inventar una organización');
+      // Nombrar el panel, en vez de dejarlo vacío: si se deja null, Claude Code se inventa
+      // "<nombre>'s Organization", que se lee como una organización real a la que perteneces.
+      assert.strictEqual(ident.organizationName, 'ClaudeSwaper');
+      assert.strictEqual(ident.organizationUuid, null, 'no se puede inventar un uuid de organización');
     } finally { store.remove(a.id); }
   });
 
