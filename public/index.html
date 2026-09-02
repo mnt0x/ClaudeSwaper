@@ -49,25 +49,14 @@
   </div>
 
   <div class="toolbar">
-    <!-- Entorno donde aplica el swap: host o un WSL. Lo rellena app.js; oculto si solo hay host. -->
-    <div class="targets" id="targets" role="group" aria-label="Entorno donde cambiar de cuenta" hidden></div>
     <span class="sync" id="sync" aria-live="polite"></span>
     <button class="btn" id="btn-refresh" title="Actualizar uso · R">
       <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-refresh"/></svg>
       <span>refresh</span>
     </button>
-    <button class="btn btn-primary" id="btn-import"
-            title="Guarda la cuenta con la que tienes sesión ahora · I · Mayús+clic para una carpeta CLAUDE_CONFIG_DIR">
-      <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-import"/></svg>
-      <span>import</span>
-    </button>
   </div>
 </header>
 
-<div class="notice notice-warn" id="banner-running" hidden>
-  <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-alert"/></svg>
-  <p>Claude Code está abierto. El cambio se aplica a las sesiones <strong>nuevas</strong>: ciérralo y vuelve a abrirlo.</p>
-</div>
 <div class="notice notice-error" id="banner-offline" hidden>
   <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-alert"/></svg>
   <p>Sin respuesta del servidor local. ¿Se ha cerrado <code>node server.js</code>?</p>
@@ -90,16 +79,9 @@
 </form>
 
 <main>
-  <div class="panel" id="panel">
-    <div class="columns" id="columns" hidden>
-      <span>account</span>
-      <span>plan</span>
-      <span>session · 5h</span>
-      <span>week · 7d</span>
-      <span class="sr-only">Acción</span>
-    </div>
-    <div id="rows" class="rows" aria-busy="true"></div>
-  </div>
+  <!-- Una sección por entorno (host, y cada WSL). Las rellena app.js con las MISMAS cuentas;
+       cada sección marca la suya activa y su swap escribe en ese entorno. -->
+  <div id="envs" aria-busy="true"></div>
 
   <section class="empty" id="empty" hidden>
     <h2>0 cuentas registradas</h2>
@@ -117,6 +99,31 @@
 </main>
 
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<template id="tpl-env">
+  <section class="env">
+    <div class="env-head">
+      <span class="env-name"></span>
+      <span class="env-run" aria-hidden="true" hidden></span>
+      <span class="env-note" hidden></span>
+      <button class="btn btn-import-env" type="button"
+              title="Guarda la cuenta con la que tienes sesión ahora en este entorno · Mayús+clic para una carpeta CLAUDE_CONFIG_DIR">
+        <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-import"/></svg>
+        <span>import</span>
+      </button>
+    </div>
+    <div class="panel">
+      <div class="columns">
+        <span>account</span>
+        <span>plan</span>
+        <span>session · 5h</span>
+        <span>week · 7d</span>
+        <span class="sr-only">Acción</span>
+      </div>
+      <div class="rows"></div>
+    </div>
+  </section>
+</template>
 
 <template id="tpl-row">
   <article class="row">

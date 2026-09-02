@@ -147,22 +147,18 @@ code {
   width: 21px; height: 21px;
   filter: drop-shadow(0 0 5px rgba(0, 255, 156, 0.55));
   position: relative; /* por encima del halo del pin */
-  transform-origin: 50% 50%;
-  /* Las flechas hacen el gesto que nombran: un giro de 180 (intercambio), pausa, y otro
-     180 que completa la vuelta. Significa "swap", no es un girito de gadget. */
-  animation: logo-swap 5.5s var(--ease) infinite;
-}
-@keyframes logo-swap {
-  0%, 32%  { transform: rotate(0turn); }
-  46%, 82% { transform: rotate(0.5turn); }
-  100%     { transform: rotate(1turn); }
 }
 .scope-pin:hover .scope-logo { filter: drop-shadow(0 0 9px rgba(0, 255, 156, 0.9)); }
-/* Dos capas: las flechas siempre legibles (base tenue y sólida) y, encima, un punto de
-   luz que las recorre (app.js mueve stroke-dashoffset de la traza). Sin la base, la traza
-   punteada dejaba el logo ilegible en reposo. */
-.logo-base  { color: rgba(0, 255, 156, 0.5); }
-.logo-trace { color: #baffe4; }
+/* Dos capas: la base tenue y sólida deja las flechas siempre legibles; encima, un punto de
+   luz recorre la traza (stroke-dashoffset) y las va "dibujando desde los lados". Solo CSS;
+   se congela con prefers-reduced-motion por la regla global, dejando las flechas sólidas. */
+.logo-base  { color: rgba(0, 255, 156, 0.45); }
+.logo-trace {
+  color: #baffe4;
+  stroke-dasharray: 6 30;
+  animation: logo-trace 2.8s linear infinite;
+}
+@keyframes logo-trace { from { stroke-dashoffset: 36; } to { stroke-dashoffset: 0; } }
 
 .masthead h1 {
   margin: 0;
@@ -175,29 +171,6 @@ code {
 
 .toolbar { display: flex; align-items: center; gap: 0.45rem; }
 
-/* Selector de entorno: host / WSL. Segmentado, mismo lenguaje que los botones. */
-.targets {
-  display: inline-flex; align-items: stretch;
-  border: 1px solid var(--line); border-radius: var(--r-md);
-  background: var(--surface-2); overflow: hidden;
-  margin-right: 0.35rem;
-}
-.target-btn {
-  display: inline-flex; align-items: center; gap: 0.4rem;
-  font: inherit; font-size: 11.5px; font-weight: 500;
-  color: var(--text-3);
-  background: transparent; border: 0; cursor: pointer;
-  padding: 0.42rem 0.7rem; white-space: nowrap;
-  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
-}
-.target-btn + .target-btn { border-left: 1px solid var(--line); }
-.target-btn:hover { color: var(--text); background: #111c18; }
-.target-btn.is-current { color: var(--phos); background: var(--phos-dim); }
-/* Punto que marca que Claude Code corre en ese entorno (el swap irá a sesiones nuevas). */
-.target-run {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--warn); box-shadow: 0 0 7px rgba(255, 204, 77, 0.7);
-}
 
 .sync {
   font-size: 11.5px; color: var(--text-3);
@@ -260,9 +233,35 @@ code {
 .notice-error .ico { color: var(--crit); }
 .notice code { background: rgba(255, 255, 255, 0.05); border-color: transparent; color: inherit; }
 
-/* ---------- panel ---------- */
+/* ---------- environments ---------- */
 
 main { max-width: 1180px; margin: 0 auto; }
+
+/* Una sección por entorno. Todas se ven a la vez: host arriba, cada WSL debajo. */
+.env { margin-bottom: 1.5rem; }
+.env:last-child { margin-bottom: 0; }
+
+.env-head {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0 0.15rem 0.55rem;
+}
+/* El titulillo del entorno: pequeño, en versalitas de fósforo. */
+.env-name {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--phos);
+}
+.env-run {
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: var(--warn); box-shadow: 0 0 7px rgba(255, 204, 77, 0.7);
+}
+.env-note {
+  font-size: 11px; color: #e6d9a8;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* El import de cada entorno se va a la derecha de su cabecera. */
+.btn-import-env { margin-left: auto; }
+
+/* ---------- panel ---------- */
 
 /* Elevacion declarada una vez: borde + una superficie opaca para que la rejilla del
    fondo quede en los margenes y los datos se lean limpios (chasis del instrumento). */

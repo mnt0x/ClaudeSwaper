@@ -6,8 +6,10 @@
 const POLL_MS = 10 * 60 * 1000;
 
 const $ = (sel, root = document) => root.querySelector(sel);
-const rowsEl = $('#rows');
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const envsEl = $('#envs');
 const tpl = $('#tpl-row');
+const tplEnv = $('#tpl-env');
 
 let accounts = [];
 let usageById = {};
@@ -16,10 +18,9 @@ let swapping = false;
 // AbortController of the row confirmation currently open, if any. Also doubles as "a
 // destructive question is on screen", which the keyboard shortcuts must not talk over.
 let openConfirm = null;
-// Which environment the dashboard is acting on: 'host' or 'wsl:<distro>'. The account list
-// is shared; only the active marker and where a swap writes change with it.
-let currentTarget = 'host';
-let targetList = [];
+// Environments shown at once, from /api/targets: [{id,label,kind,activeId,running}]. The
+// account list is shared; each section marks its own active account and swaps into it.
+let targetList = [{ id: 'host', label: 'host', kind: 'host', activeId: null, running: false }];
 
 /* ---------------- transport ---------------- */
 
@@ -99,18 +100,26 @@ function fillMeter(meterEl, data, extra) {
 
 /* ---------------- rendering ---------------- */
 
+function skeletonRow() {
+  const row = document.createElement('article');
+  row.className = 'row is-skeleton';
+  row.innerHTML = '<div class="who"><span class="bone" style="width:60%"></span></div>'
+    + '<span class="bone" style="width:56px"></span>'
+    + '<div class="meter"><span class="bone"></span></div>'
+    + '<div class="meter"><span class="bone"></span></div>'
+    + '<div class="actions"><span class="bone" style="width:84px;height:26px"></span></div>';
+  return row;
+}
+
 function renderSkeletons(n = 2) {
-  rowsEl.innerHTML = '';
-  for (let i = 0; i < n; i++) {
-    const row = document.createElement('article');
-    row.className = 'row is-skeleton';
-    row.innerHTML = '<div class="who"><span class="bone" style="width:60%"></span></div>'
-      + '<span class="bone" style="width:56px"></span>'
-      + '<div class="meter"><span class="bone"></span></div>'
-      + '<div class="meter"><span class="bone"></span></div>'
-      + '<div class="actions"><span class="bone" style="width:84px;height:26px"></span></div>';
-    rowsEl.append(row);
-  }
+  envsEl.innerHTML = '';
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  const rows = document.createElement('div');
+  rows.className = 'rows';
+  for (let i = 0; i < n; i++) rows.append(skeletonRow());
+  panel.append(rows);
+  envsEl.append(panel);
 }
 
 function noteFor(usage) {
@@ -131,12 +140,13 @@ function noteFor(usage) {
   return { tone: 'warn', text: usage.error };
 }
 
-function buildRow(account) {
+function buildRow(account, target) {
   const node = tpl.content.firstElementChild.cloneNode(true);
   const usage = usageById[account.id];
+  const isActive = account.id === target.activeId;
 
   node.dataset.id = account.id;
-  node.classList.toggle('is-active', account.isActive);
+  node.classList.toggle('is-active', isActive);
   if (usage && !usage.ok) {
     node.classList.add(usage.needsRelogin ? 'is-error' : 'is-waiting');
   }
@@ -159,12 +169,12 @@ function buildRow(account) {
   }
 
   const swapBtn = $('.btn-swap', node);
-  if (account.isActive) {
+  if (isActive) {
     swapBtn.remove();
   } else {
     swapBtn.disabled = swapping;
-    swapBtn.title = `Poner ${account.label} como cuenta activa`;
-    swapBtn.addEventListener('click', () => doSwap(account.id, swapBtn));
+    swapBtn.title = `Poner ${account.label} como activa en ${target.label}`;
+    swapBtn.addEventListener('click', () => doSwap(account.id, target.id, swapBtn));
   }
   // Per row, or every remove button in the panel announces the same name and a screen
   // reader user cannot tell which account they are about to drop.
@@ -176,28 +186,58 @@ function buildRow(account) {
   return node;
 }
 
-function render() {
-  const has = accounts.length > 0;
-  $('#empty').hidden = has;
-  $('#panel').hidden = !has;
-  $('#columns').hidden = !has;
-  rowsEl.setAttribute('aria-busy', 'false');
-  // Every row is about to be replaced, so an open confirmation is answering about a node
-  // that will not exist — drop it and its document-level listeners with it.
-  if (openConfirm) { openConfirm.abort(); openConfirm = null; }
-  rowsEl.innerHTML = '';
-
-  // Active first, then the least-used session: the next one worth switching to.
-  const sorted = [...accounts].sort((a, b) => {
-    if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+// Active first (for THIS environment), then the least-used session: the next worth switching to.
+function sortedFor(target) {
+  return [...accounts].sort((a, b) => {
+    const aa = a.id === target.activeId;
+    const bb = b.id === target.activeId;
+    if (aa !== bb) return aa ? -1 : 1;
     const ua = usageById[a.id];
     const ub = usageById[b.id];
     const pa = ua && ua.ok ? ua.session.percent : 999;
     const pb = ub && ub.ok ? ub.session.percent : 999;
     return pa - pb;
   });
+}
 
-  for (const account of sorted) rowsEl.append(buildRow(account));
+// One section per environment: a titled header (host / WSL · <distro>) with its own import,
+// and the shared accounts marked and swappable FOR THAT ENVIRONMENT.
+function buildSection(target) {
+  const node = tplEnv.content.firstElementChild.cloneNode(true);
+  node.dataset.target = target.id;
+  $('.env-name', node).textContent = target.label;
+
+  if (target.running) {
+    $('.env-run', node).hidden = false;
+    const note = $('.env-note', node);
+    note.hidden = false;
+    note.textContent = 'Claude Code abierto — el cambio va a sesiones nuevas';
+  }
+
+  // Import the account currently logged into THIS environment. Shift-click on the host
+  // uses an isolated login dir; WSL has no such concept, so it just imports normally.
+  const imp = $('.btn-import-env', node);
+  imp.addEventListener('click', (e) => {
+    if (e.shiftKey && target.kind === 'host') { openDirField(); return; }
+    importCurrent(null, target.id);
+  });
+
+  const rows = $('.rows', node);
+  for (const account of sortedFor(target)) rows.append(buildRow(account, target));
+  return node;
+}
+
+function render() {
+  const has = accounts.length > 0;
+  $('#empty').hidden = has;
+  envsEl.hidden = !has;
+  envsEl.setAttribute('aria-busy', 'false');
+  // Every row is about to be replaced, so an open confirmation is answering about a node
+  // that will not exist — drop it and its document-level listeners with it.
+  if (openConfirm) { openConfirm.abort(); openConfirm = null; }
+  envsEl.innerHTML = '';
+
+  if (has) for (const target of targetList) envsEl.append(buildSection(target));
   $('#sync').textContent = syncLabel(lastFetch);
 }
 
@@ -257,17 +297,17 @@ function armRemoval(node, account) {
   }, { signal });
 }
 
-async function doSwap(id, button) {
+async function doSwap(id, targetId, button) {
   if (swapping) return;
   swapping = true;
-  document.querySelectorAll('.btn-swap').forEach((b) => { b.disabled = true; });
+  $$('.btn-swap').forEach((b) => { b.disabled = true; });
   const row = button.closest('.row');
   row.classList.add('is-busy');
   button.classList.add('is-loading');
 
   try {
-    const result = await api('/api/swap', { method: 'POST', body: { id, target: currentTarget } });
-    toast(`Cuenta activa: ${result.account.label}`, 'ok');
+    const result = await api('/api/swap', { method: 'POST', body: { id, target: targetId } });
+    toast(`Cuenta activa en ${result.targetLabel || 'host'}: ${result.account.label}`, 'ok');
     for (const w of result.warnings || []) toast(w);
     // The swap already fetched this account's usage to verify the token; the server
     // seeded its cache with it, so a plain refresh picks it up for free.
@@ -282,16 +322,16 @@ async function doSwap(id, button) {
     row.classList.remove('is-busy');
     button.classList.remove('is-loading');
     swapping = false;
-    document.querySelectorAll('.btn-swap').forEach((b) => { b.disabled = false; });
+    $$('.btn-swap').forEach((b) => { b.disabled = false; });
   }
 }
 
-async function importCurrent(configDir) {
-  const buttons = [$('#btn-import'), $('#btn-import-empty')].filter(Boolean);
+async function importCurrent(configDir, targetId = 'host') {
+  const buttons = [...$$('.btn-import-env'), $('#btn-import-empty')].filter(Boolean);
   buttons.forEach((b) => { b.disabled = true; b.classList.add('is-loading'); });
   try {
     const result = await api('/api/accounts/import', {
-      method: 'POST', body: { target: currentTarget, ...(configDir ? { configDir } : {}) },
+      method: 'POST', body: { target: targetId, ...(configDir ? { configDir } : {}) },
     });
     toast(`Importada: ${result.account.email}`, 'ok');
     await refresh(false);
@@ -317,74 +357,31 @@ function scheduleQueuedRetry() {
   queuedRetry = setTimeout(() => { if (!swapping) refresh(false); }, (Math.min(...waits) + 2) * 1000);
 }
 
-// The environment selector. Only shows once there is more than one place to swap — on a
-// machine without WSL it is a single 'host' and stays hidden.
-function renderTargets() {
-  const el = $('#targets');
-  if (!el) return;
-  if (targetList.length < 2) { el.hidden = true; el.innerHTML = ''; return; }
-  el.hidden = false;
-  el.innerHTML = '';
-  for (const t of targetList) {
-    const b = document.createElement('button');
-    b.className = 'target-btn' + (t.id === currentTarget ? ' is-current' : '');
-    b.type = 'button';
-    b.setAttribute('aria-pressed', String(t.id === currentTarget));
-    b.title = t.running ? `Claude Code está abierto en ${t.label}` : t.label;
-    b.append(document.createTextNode(t.label));
-    if (t.running) {
-      const dot = document.createElement('span');
-      dot.className = 'target-run';
-      dot.setAttribute('aria-hidden', 'true');
-      b.append(dot);
-    }
-    b.addEventListener('click', () => {
-      if (currentTarget === t.id) return;
-      currentTarget = t.id;
-      renderTargets();
-      refresh(false);
-    });
-    el.append(b);
-  }
-}
-
-function currentTargetInfo() {
-  return targetList.find((t) => t.id === currentTarget) || null;
-}
-
 async function refresh(force = false) {
   const btn = $('#btn-refresh');
   btn.disabled = true;
   btn.classList.add('is-loading');
   try {
+    // Environments first: this drives one section each, with their per-environment active
+    // account and running state. Falls back to host-only if the endpoint is unreachable.
     const t = await api('/api/targets').catch(() => null);
-    if (t && Array.isArray(t.targets)) {
-      targetList = t.targets;
-      if (!targetList.some((x) => x.id === currentTarget)) currentTarget = 'host';
-      renderTargets();
-    }
+    targetList = (t && Array.isArray(t.targets) && t.targets.length)
+      ? t.targets
+      : [{ id: 'host', label: 'host', kind: 'host', activeId: null, running: false }];
 
-    const data = await api(`/api/accounts?target=${encodeURIComponent(currentTarget)}`);
+    // The accounts are shared across environments; fetch them once. Each section marks its
+    // own active from targetList, so the target of this call does not matter.
+    const data = await api('/api/accounts?target=host');
     accounts = data.accounts;
     usageById = accounts.length ? await api(`/api/usage/all${force ? '?force=1' : ''}`) : {};
     lastFetch = Date.now();
     $('#banner-offline').hidden = true;
     scheduleQueuedRetry();
 
-    // "Claude Code abierto" reflects the SELECTED environment, not always the host.
-    const info = currentTargetInfo();
-    const running = info ? info.running : false;
-    const banner = $('#banner-running');
-    if (running) {
-      const where = info && info.kind === 'wsl' ? ` en ${info.label}` : '';
-      $('p', banner).innerHTML = `Claude Code está abierto${where}. El cambio se aplica a las sesiones <strong>nuevas</strong>: ciérralo y vuelve a abrirlo.`;
-    }
-    banner.hidden = !running;
-
     render();
   } catch (err) {
     $('#banner-offline').hidden = false;
-    rowsEl.setAttribute('aria-busy', 'false');
+    envsEl.setAttribute('aria-busy', 'false');
     console.error(err);
   } finally {
     btn.disabled = false;
@@ -403,24 +400,27 @@ const dirForm = $('#dir-form');
 const dirInput = $('#dir-input');
 
 function openDirField() { dirForm.hidden = false; dirInput.focus(); dirInput.select(); }
-function closeDirField() { dirForm.hidden = true; dirInput.value = ''; $('#btn-import').focus(); }
+function closeDirField() {
+  dirForm.hidden = true; dirInput.value = '';
+  const back = $('.btn-import-env') || $('#btn-import-empty');
+  if (back) back.focus();
+}
 
+// The isolated-login dir is a host concept (CLAUDE_CONFIG_DIR=... claude /login).
 dirForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const dir = dirInput.value.trim();
   if (!dir) { dirInput.focus(); return; }
   dirForm.hidden = true;
-  await importCurrent(dir);
+  await importCurrent(dir, 'host');
   dirInput.value = '';
 });
 $('#dir-cancel').addEventListener('click', closeDirField);
 dirInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDirField(); });
 
-const wireImport = (el) => el && el.addEventListener('click', (e) => (
-  e.shiftKey ? openDirField() : importCurrent()
-));
-wireImport($('#btn-import'));
-wireImport($('#btn-import-empty'));
+// The empty state only exists before any account, i.e. host.
+const emptyImport = $('#btn-import-empty');
+if (emptyImport) emptyImport.addEventListener('click', (e) => (e.shiftKey ? openDirField() : importCurrent(null, 'host')));
 
 document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -429,7 +429,7 @@ document.addEventListener('keydown', (e) => {
   if (openConfirm) return;
   if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
   if (e.key === 'r') refresh(true);
-  if (e.key === 'i') importCurrent();
+  if (e.key === 'i') importCurrent(null, 'host');
 });
 
 // Countdowns tick locally; no API call involved.
