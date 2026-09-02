@@ -213,6 +213,41 @@ so on macOS it lands in the Keychain rather than in a file Claude Code never rea
 
 ---
 
+## Running in a container
+
+The image is Linux; the host may be anything. What crosses the container boundary and what does
+not is the whole of the design here, and the app is expected to say which is which rather than
+degrade quietly.
+
+`paths.inContainer()` is the switch, and it reads two signals: `SWAPER_IN_CONTAINER=1`, set by
+our own Dockerfile, and `/.dockerenv` for an image someone built by hand. Podman and some
+Kubernetes runtimes create neither, which is exactly why the env var exists.
+
+Two things stop working, and both would otherwise **lie**:
+
+- **Process detection.** `pgrep` inside a container sees the container's namespace, so it finds
+  this server and nothing else. Returning `running: false` would tell the user Claude Code is
+  closed while it runs on the host, so `detectClaudeProcesses` returns `unknown: true` instead
+  and the UI says it cannot tell from in here.
+- **WSL targets.** `wsl.exe` does not exist in a Linux container, so `targets.list()` returns
+  the host alone. It already gates that on `process.platform === 'win32'`, so nothing was needed.
+
+On macOS there is a third: credentials live in the login Keychain, reached through the `security`
+binary, which a Linux container cannot call. `credentials.read()` falls back to the plain file,
+so swapping works there only if the user has one.
+
+`SWAPER_BIND` splits the bind address from the browser-facing host. Inside a container the socket
+has to listen on `0.0.0.0` to be reachable at all, so the loopback guarantee moves outward, to
+publishing the port as `127.0.0.1:<port>:7373`. The server says so on start-up when the two
+differ, because a bind widened by accident is not visible from the panel.
+
+`/app/data` is created and chowned to `node` **before** the `VOLUME` declaration. Docker
+copies the image path's ownership into a named volume the first time it is populated; without that
+step the volume is root-owned, the process runs as `node`, and start-up dies with
+`EACCES: permission denied, mkdir '/app/data/backups'`.
+
+---
+
 ## Targets: host and WSL
 
 A **target** is where a swap writes. `lib/targets.js` enumerates them:
@@ -294,6 +329,16 @@ NormalizedUsage:
 Guards: loopback bind, `Host` validated, cross-site `Origin` rejected, `X-Swaper: 1` required
 on **every `/api/` request, GET included**, static serving confined to `public/`. Anything
 matching `sk-ant-[A-Za-z0-9_-]+` is scrubbed before it can reach a log or a response body.
+
+The `Host` check validates the **hostname only** — `127.0.0.1`, `localhost`, `::1` — and
+deliberately ignores the port. A container listens on 7373 and is published as whatever the user
+chose, so the browser sends the *published* port, which this process cannot know; pinning it
+rejected every containerised request with "Host no permitido". Nothing is lost by dropping it,
+because the port never defended anything. The attack this guards against is DNS rebinding: a page
+on `evil.com` whose domain resolves to 127.0.0.1, so the browser genuinely connects to this
+socket. What gives it away is that the `Host` header then reads `evil.com`, since the browser
+fills it from the URL the page used. An ordinary cross-origin fetch is stopped twice over, by the
+`Origin` check and by a custom header a cross-site request cannot set without a preflight.
 
 GET is not exempt because read-only is not the same as harmless: `/api/health` spawns a process
 per call and `/api/usage` spends the app's whole request budget for the window, and neither an

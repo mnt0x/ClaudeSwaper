@@ -1,0 +1,47 @@
+# ClaudeSwaper en contenedor.
+#
+#   docker compose up -d          y abre http://127.0.0.1:7373
+#
+# Antes de usarlo, lee "Docker" en el README: dentro de un contenedor el panel pierde la
+# detección de procesos y los targets de WSL, y en macOS solo puede tocar las credenciales si
+# están en fichero y no en el Llavero. No es un bug, es la frontera del contenedor.
+#
+# NO LEVANTES ESTO Y `node server.js` A LA VEZ. El suelo que mantiene la app dentro del cupo del
+# endpoint de uso (unas 5 peticiones por 5 minutos) se lleva POR PROCESO, así que dos instancias
+# doblan el ritmo de salida y se rate-limitan la una a la otra. Una u otra, no las dos.
+
+services:
+  claudeswaper:
+    build: .
+    image: claudeswaper:latest
+    container_name: claudeswaper
+
+    # 127.0.0.1: en el lado del HOST. El servidor escucha en 0.0.0.0 dentro del contenedor
+    # porque no le queda otra, así que el loopback tiene que imponerse aquí. Quitar el
+    # "127.0.0.1:" publicaría en todas las interfaces de la máquina un panel que maneja
+    # credenciales de pago; no lo hagas para "verlo desde el móvil".
+    ports:
+      - "127.0.0.1:${SWAPER_PORT:-7373}:7373"
+
+    environment:
+      PORT: 7373
+      SWAPER_BIND: 0.0.0.0
+      SWAPER_IN_CONTAINER: "1"
+      NO_OPEN: "1"
+
+    volumes:
+      # Las cuentas guardadas y la caché de uso, compartidas con una instalación local del
+      # repo. Es lo que se quiere casi siempre: das de alta una cuenta con `node server.js` y
+      # el contenedor la ve, y al revés. Un volumen con nombre (`claudeswaper-data:/app/data`)
+      # daría un almacén SEPARADO y vacío — correcto para un servidor que solo usa Docker,
+      # desconcertante en una máquina donde ya tenías cuentas dadas de alta.
+      - ./data:/app/data
+
+      # La configuración REAL de Claude Code en tu máquina: sin esto el swap no tiene nada que
+      # cambiar y el panel queda en modo mirón. CLAUDE_HOME por defecto es $HOME, que resuelve
+      # solo en Linux y macOS; en Windows (PowerShell) define antes:
+      #   $env:CLAUDE_HOME = $env:USERPROFILE
+      - ${CLAUDE_HOME:-${HOME}}/.claude:/home/node/.claude
+      - ${CLAUDE_HOME:-${HOME}}/.claude.json:/home/node/.claude.json
+
+    restart: unless-stopped

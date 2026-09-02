@@ -1,0 +1,38 @@
+# The suite is one file, has no dependencies and makes no external network calls, so CI is the
+# whole story: check out, run it. Node 18 is the floor the app declares (it needs global fetch);
+# 20 and 22 guard against something newer breaking on an older runtime and nobody noticing.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # No `npm ci`: package.json declares zero dependencies and there is no lockfile to install
+      # from. Adding an install step here would only invent a way for CI to fail.
+      - run: node test.js
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Only that the image builds. Running it in CI would prove little: the container's whole
+      # point is reaching a host ~/.claude that a runner does not have.
+      - run: docker build -t claudeswaper:ci .

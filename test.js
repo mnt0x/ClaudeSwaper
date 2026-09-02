@@ -889,6 +889,72 @@ async function checkAsync(name, fn) {
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
   });
 
+  check('en un contenedor, "no veo los procesos" no se reporta como "no hay procesos"', () => {
+    const antes = process.env.SWAPER_IN_CONTAINER;
+    try {
+      process.env.SWAPER_IN_CONTAINER = '1';
+      assert.strictEqual(P.inContainer(), true);
+      const r = swapLib.detectClaudeProcesses();
+      // running:false a secas sería una mentira con cara de certeza: el panel diría que Claude
+      // Code está cerrado mientras corre en el host, al otro lado de la frontera del contenedor.
+      assert.strictEqual(r.unknown, true, 'debe admitir que no puede saberlo');
+      assert.deepStrictEqual(r.pids, []);
+    } finally {
+      if (antes === undefined) delete process.env.SWAPER_IN_CONTAINER;
+      else process.env.SWAPER_IN_CONTAINER = antes;
+    }
+  });
+
+  check('fuera de un contenedor la detección sigue siendo real', () => {
+    const antes = process.env.SWAPER_IN_CONTAINER;
+    try {
+      delete process.env.SWAPER_IN_CONTAINER;
+      assert.strictEqual(P.inContainer(), false, 'sin la variable y sin /.dockerenv');
+      const r = swapLib.detectClaudeProcesses();
+      assert.strictEqual(r.unknown, undefined, 'aquí sí se puede mirar, así que no hay excusa');
+      assert.ok(Array.isArray(r.pids));
+    } finally {
+      if (antes !== undefined) process.env.SWAPER_IN_CONTAINER = antes;
+    }
+  });
+
+  await checkAsync('el guard valida el HOSTNAME, no el puerto: rebinding fuera, contenedor dentro', async () => {
+    const realFetch = global.fetch;
+    const server = require('./server').createServer(7996);
+    try {
+      await new Promise((r) => server.listen(7996, '127.0.0.1', r));
+      // http.request y no fetch: Host es un "forbidden header name", así que fetch lo ignora en
+      // silencio y el test pasaría sin haber probado nada. Esto lo descubrió el propio test
+      // fallando al revés — pedía un 403 y recibía un 200 porque su Host nunca salió.
+      const http = require('node:http');
+      const pedir = (headers) => new Promise((resolve, reject) => {
+        const req = http.request({
+          host: '127.0.0.1', port: 7996, path: '/api/health', method: 'GET',
+          headers: { 'X-Swaper': '1', ...headers },
+        }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+        req.on('error', reject);
+        req.end();
+      });
+
+      // Un dominio que resuelve a 127.0.0.1 hace que el navegador SÍ conecte con este socket;
+      // lo que le delata es que la cabecera Host lleva su dominio, no el loopback.
+      assert.strictEqual(await pedir({ Host: 'evil.example' }), 403, 'DNS rebinding debe caer');
+      assert.strictEqual(await pedir({ Host: 'claudeswaper.local' }), 403);
+
+      // El puerto NO se valida: al publicar el contenedor con -p el navegador manda el puerto
+      // externo, que este proceso no puede conocer. Exigirlo rechazaba todo uso en Docker.
+      assert.strictEqual(await pedir({ Host: '127.0.0.1:27387' }), 200, 'otro puerto es legítimo');
+      assert.strictEqual(await pedir({ Host: 'localhost:9999' }), 200);
+
+      // Un Origin de otro sitio sigue fuera, aunque el Host esté bien.
+      assert.strictEqual(await pedir({ Origin: 'http://evil.example' }), 403, 'origen ajeno fuera');
+      assert.strictEqual(await pedir({ Origin: 'http://127.0.0.1:27387' }), 200);
+    } finally {
+      global.fetch = realFetch;
+      await new Promise((r) => server.close(r));
+    }
+  });
+
   await checkAsync('POST /api/accounts/token rechaza un token inválido sin crear nada', async () => {
     const realFetch = global.fetch;
     const server = require('./server').createServer(7998);

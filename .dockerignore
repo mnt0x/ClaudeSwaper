@@ -1,0 +1,17 @@
+# data/ guarda tokens OAuth vivos de cuentas de pago. Que acabe dentro de una imagen — que se
+# comparte, se sube a un registro y se queda en el historial de capas — es la peor forma de
+# filtrarlos. Primera línea del fichero por ese motivo.
+data/
+
+.git/
+.gitignore
+node_modules/
+*.log
+*.tmp
+
+# Documentación y metadatos: no los necesita el runtime y solo invalidan la caché de capas.
+*.md
+.github/
+docker-compose.yml
+Dockerfile
+.dockerignore

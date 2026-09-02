@@ -486,6 +486,26 @@ async function refresh(force = false) {
   }
 }
 
+/**
+ * Two things only the server can know, asked once at boot rather than on every poll: whether it
+ * is running inside a container (where it cannot see host processes or WSL distros) and whether
+ * an environment variable outranks the credentials file. The second is the nastier one — every
+ * swap then reports success and changes nothing that Claude Code will read — and it is invisible
+ * from the panel unless it is said out loud.
+ */
+async function reportEnvironment() {
+  let health;
+  try { health = await api('/api/health'); } catch { return; }
+
+  if (health.container) $('#banner-container').hidden = false;
+
+  const vars = health.overridingEnv || [];
+  if (vars.length) {
+    $('#env-vars').textContent = vars.join(' y ');
+    $('#banner-env').hidden = false;
+  }
+}
+
 /* ---------------- boot ---------------- */
 
 $('#btn-refresh').addEventListener('click', () => refresh(true));
@@ -596,6 +616,7 @@ setInterval(() => { if (!swapping) refresh(false); }, POLL_MS);
 // API call every time.
 renderSkeletons();
 refresh(false);
+reportEnvironment();
 
 /* ---------------- fondo: campo de brasas de fosforo (firma) ----------------
    Particulas advectadas por un flow-field barato (suma de senos: sin tablas de ruido,

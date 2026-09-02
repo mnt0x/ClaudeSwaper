@@ -1,198 +1,255 @@
+<div align="center">
+
 # ClaudeSwaper
 
-Panel local para gestionar varias cuentas de Claude y **cambiar la cuenta activa de Claude
-Code con un clic**, sin volver a hacer `claude` y `/login`. Pegas el token de cada cuenta una
-vez y a partir de ahí saltas entre ellas al instante — en tu equipo y en tus entornos WSL, desde
-la misma pantalla.
+**Switch the active Claude Code account with one click — and see how much of each account's quota is left before you do.**
 
-Además te muestra, para cada cuenta, cuánto llevas gastado de la sesión de 5 horas y del límite
-semanal, con su cuenta atrás — para saber de un vistazo a cuál conviene saltar.
+[![test](https://github.com/mnt0x/ClaudeSwaper/actions/workflows/test.yml/badge.svg)](https://github.com/mnt0x/ClaudeSwaper/actions/workflows/test.yml)
+[![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](package.json)
+[![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](#docker)
+[![platform](https://img.shields.io/badge/platform-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-lightgrey)](#requirements)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Cero dependencias: no hay `npm install` ni compilación. Solo Node 18 o superior, un fichero
-`server.js` y tres estáticos.
-
-```
-Swaper
-
-HOST                                                                         [ import ]
-  ● Cyberxia    devs@…       Max 20x   SESSION  2%   WEEK  30%            [ IN USE ]
-    Castillo    carlos@…     Max 20x   SESSION  0%   WEEK  32%            [  swap  ]
-
-WSL · Ubuntu                                                                 [ import ]
-  ● Castillo    carlos@…     Max 20x   SESSION 12%   WEEK  19%            [ IN USE ]
-    Cyberxia    devs@…       Max 20x   SESSION  4%   WEEK  23%            [  swap  ]
-```
+</div>
 
 ---
 
-## Requisitos
+No `npm install`, no build step, no telemetry, nothing leaves your machine but the two calls it
+makes to Anthropic. One `server.js`, seven small modules and three static files.
 
-- **Node 18 o superior** (usa `fetch` nativo).
-- Claude Code instalado (para generar los tokens con `claude setup-token`).
+```
+Swaper                                                        [ + add token ]  [ refresh ]
 
-No necesita permisos de administrador ni conexión a más servicios que la propia API de Claude.
+HOST                                                                          [ import ]
+  ● Cyberxia    devs@…       Max 20x   SESSION   2%   WEEK  30%             [  IN USE  ]
+    Castillo    carlos@…     Max 20x   SESSION   0%   WEEK  32%             [   swap   ]
+
+WSL · Ubuntu                                                                  [ import ]
+  ● Castillo    carlos@…     Max 20x   SESSION  12%   WEEK  19%             [  IN USE  ]
+    Cyberxia    devs@…       Max 20x   SESSION   4%   WEEK  23%             [   swap   ]
+```
+
+> **The interface is in Spanish.** The labels map one to one onto the sections below:
+> *añadir token* = add token, *importar* = import, *swap* = switch to this account,
+> *renombrar* = rename, *quitar* = remove, *sesión · 5h* / *semana · 7d* = the two quota windows.
 
 ---
 
-## Arrancar
+## Contents
 
-En la carpeta del proyecto:
+- [Why](#why) · [Requirements](#requirements) · [Quick start](#quick-start)
+- [Adding accounts](#adding-accounts) · [Usage meters](#usage-meters) · [Switching](#switching)
+- [Docker](#docker) · [Security](#security) · [Limitations](#limitations)
+- [Troubleshooting](#troubleshooting) · [Development](#development)
 
-```
+---
+
+## Why
+
+Claude Code holds one account at a time. Using a second one means `claude`, `/login`, a browser
+round trip, every time. If you have a personal account and a work one, that is a tax you pay all
+day.
+
+ClaudeSwaper stores each account once and makes the change a click — on your machine and inside
+your WSL distros, from the same screen. It also shows what each account has left of its 5-hour
+session window and its weekly window, so the question it actually answers is *which account should
+I switch to right now*.
+
+## Requirements
+
+- **Node 18 or newer.** It uses the built-in `fetch`; there is nothing else to install.
+- **Claude Code**, to mint the tokens (`claude setup-token`) or to import a live session.
+- Works on **Windows, macOS and Linux**. WSL targets are a Windows feature; see
+  [Limitations](#limitations).
+
+## Quick start
+
+```bash
+git clone https://github.com/mnt0x/ClaudeSwaper.git
+cd ClaudeSwaper
 node server.js
 ```
 
-Se abre solo en <http://127.0.0.1:7373> y escucha **únicamente en loopback** (127.0.0.1): no
-es accesible desde la red. Para dejarlo de fondo, `npm start`.
+It opens <http://127.0.0.1:7373>. Another port:
 
-Si ya hay una instancia en marcha, la segunda te avisa, abre la que ya está y sale. Para usar
-otro puerto: `PORT=7400 node server.js`.
-
----
-
-## Añadir una cuenta
-
-Hay dos formas, y eligen por ti una cosa: si esa cuenta mostrará su consumo o no.
-
-### Pegando un token (recomendado)
-
-1. En una terminal: `claude setup-token`. Apruébalo en el navegador y copia el token que imprime.
-2. En el panel, pulsa **añadir token** (o la tecla `t`), pega el token y dale un nombre.
-
-Ese token vale **un año**. No caduca al reiniciar, no hay que renovarlo y no vuelves a entrar en
-esa cuenta en todo el año.
-
-`setup-token` genera un token con permiso **solo de inferencia** (`user:inference`). Anthropic no
-le deja consultar el perfil, así que de esas cuentas no se sabe el correo ni el plan, y aparecen
-marcadas como *solo inferencia*.
-
-El consumo **sí** se ve, por otra vía: en vez del endpoint de uso (que rechaza este token), los
-porcentajes se leen de las cabeceras `anthropic-ratelimit-unified-*` que Anthropic devuelve en
-cualquier respuesta de inferencia. Eso obliga a gastar una llamada mínima — Haiku, `max_tokens: 1`
-y un prompt de un carácter: **8 tokens de entrada y 1 de salida** por sonda. Ver el detalle en
-*Uso y límites*.
-
-### Importando la sesión activa
-
-1. Inicia sesión con esa cuenta en Claude Code (`claude`, luego `/login`).
-2. En el panel, pulsa **import**.
-
-Esa cuenta sí muestra consumo, plan y correo, porque su token tiene todos los permisos. A cambio
-hay que entrar con cada cuenta, y su token de refresco caduca a los ~29 días si no abres el panel.
-
-Para capturar una segunda cuenta sin cerrar la sesión que estás usando, inícialas en carpetas
-separadas con `CLAUDE_CONFIG_DIR` e impórtalas con **Mayús + clic** en **import** (host).
-
-En ambos casos, volver a añadir la misma cuenta la actualiza en su sitio; no crea duplicados.
-
----
-
-## Cambiar de cuenta
-
-El panel muestra tus entornos uno debajo de otro, cada uno con sus cuentas:
-
-- **HOST** — tu equipo.
-- **WSL · &lt;distro&gt;** — cada distribución de WSL con Claude Code instalado (solo en Windows).
-
-Cada entorno marca su propia cuenta activa (**IN USE**) y su propio botón **import**. Pulsa
-**swap** en la cuenta que quieras y el cambio se aplica a *ese* entorno. Host y WSL son
-independientes: puedes trabajar con una cuenta en tu equipo y otra distinta en WSL a la vez.
-
-Tus cuentas son las mismas en todos los entornos —el token es idéntico—, así que no hay que
-volver a importarlas: basta con haberlas guardado una vez.
-
-**El cambio se aplica a las sesiones nuevas de Claude Code.** Una sesión ya abierta mantiene su
-token en memoria; ciérrala y vuelve a abrirla. Si Claude Code está abierto en un entorno, su
-sección te lo indica.
-
-Por dentro, cada swap:
-
-1. Hace copia de seguridad de las credenciales y de `~/.claude.json`.
-2. Refresca el token si está a punto de caducar.
-3. Reescribe **solo** el bloque de credenciales de la cuenta (el resto del fichero, incluidos
-   los servidores MCP, no se toca) y **solo** el bloque de identidad en `~/.claude.json`.
-4. Verifica contra la API que el token nuevo funciona. Si el token está muerto, revierte desde
-   la copia; un fallo de red no revierte, pero avisa.
-
----
-
-## Por qué no vuelves a hacer login
-
-Con un token de `claude setup-token` la respuesta es simple: dura un año y no hay nada que
-renovar. Cuando se acabe, generas otro y lo pegas.
-
-Para las cuentas **importadas** el mecanismo es otro. Sus tokens de acceso duran unas 8 horas y
-el de refresco unos 29 días, rotando cada vez que se usan. Con el panel abierto, ClaudeSwaper
-renueva en segundo plano cualquier cuenta a la que le quede menos de un día de vida, de modo que
-mientras lo abras de vez en cuando tus cuentas no caducan.
-
-Si Claude Code renueva su propia sesión por su cuenta, el panel lo detecta al arrancar y adopta
-el par de tokens vigente, siempre que pueda confirmar de quién es — nunca escribe los tokens de
-una cuenta en el registro de otra.
-
----
-
-## Uso y límites
-
-El consumo se refresca **cada 5 minutos** solo, y al pulsar **refresh**. De dónde salen los
-números depende del token, y el coste con él:
-
-**Cuentas importadas (token de scope completo).** Se leen del mismo sitio que `/usage` en Claude
-Code: `/api/oauth/usage`. **Cuesta cero tokens** — es un endpoint de estado, no de inferencia, y
-consultar tu cuota no consume tu cuota.
-
-**Cuentas de `setup-token` (solo inferencia).** Ese endpoint las rechaza con 403 para siempre, así
-que el panel ni lo intenta: gastaría una de las pocas peticiones que caben en la ventana en un
-fallo seguro, y dejaría sin datos a las cuentas que sí responden. Los números salen de las
-cabeceras `anthropic-ratelimit-unified-*` de una llamada de inferencia mínima. Medido endpoint por
-endpoint, `count_tokens` y `/v1/models` no traen esas cabeceras, así que hay que gastar algo; el
-suelo es Haiku con `max_tokens: 1` y un prompt de un carácter: **8 tokens de entrada y 1 de
-salida**. A una sonda cada 5 minutos son unos 2.600 tokens al día por cuenta, contra una ventana
-de cinco horas que se mide en cientos de miles. Es real, pero es ruido.
-
-Ese endpoint tiene una cuota baja, así
-que ClaudeSwaper limita su propio ritmo de consultas y sirve valores en caché alrededor de ese
-tope; cuando no puede refrescar, muestra el último dato conocido marcado como *antiguo* en lugar
-de dejar la fila en blanco. El cambio de cuenta funciona siempre, independientemente de esto.
-
----
-
-## Copias de seguridad
-
-Antes de cada cambio se guarda una copia de las credenciales y de `~/.claude.json` en
-`data/backups/`. Se conservan las últimas 20. Si algo va mal, el propio cambio revierte solo;
-las copias están ahí como red adicional.
-
----
-
-## Seguridad
-
-- El servidor escucha solo en `127.0.0.1` y exige una cabecera propia en cada petición a su API,
-  de modo que ninguna web abierta en el navegador puede darle órdenes.
-- Los tokens viven en `data/`, con permisos restringidos al usuario, y **nunca** salen del panel:
-  la vista que llega al navegador no incluye ningún token.
-- No hay login OAuth dentro del panel. Los tokens los genera `claude setup-token` en tu terminal
-  y tú los pegas; el panel nunca conduce un flujo de autorización ni abre sesión por ti.
-- Un token pegado es un secreto de un año, más duradero que los ~8 h de un token importado.
-  Trátalo como tal: el campo del panel es de tipo contraseña y se vacía al cerrarlo.
-- Si tienes definida `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` o `CLAUDE_CODE_OAUTH_TOKEN`,
-  **Claude Code las prefiere al fichero de credenciales** y los cambios de cuenta no tendrán
-  efecto. El panel lo detecta y lo avisa al arrancar y en `/api/health`.
-
----
-
-## Comprobaciones
-
-```
-node test.js
+```bash
+PORT=7400 node server.js
 ```
 
-Cubre el normalizado del uso, el manejo de límites de la API, el ida y vuelta de credenciales, que
-la vista pública no filtra tokens, que un cambio conserva todas las claves de `~/.claude.json`, y
-que un cambio dirigido a un entorno escribe en los ficheros de ese entorno y no en los del equipo.
+The port is fixed on purpose — it does not hop to the next free one. The rate floor that keeps
+this app inside the usage endpoint's budget is enforced **per process**, so a second instance
+would double the outbound rate and rate-limit both. If the port is taken it says so and exits.
 
----
+## Adding accounts
 
-## Licencia
+Two ways in, and the choice decides one thing: whether that account can show a plan and an email.
 
-MIT. Ver [LICENSE](LICENSE).
+### Paste a long-lived token — recommended
+
+```bash
+claude setup-token
+```
+
+Approve it in the browser, copy the token it prints, then press **añadir token** in the panel (or
+the `t` key), paste it and give it a name. **It lasts a year.** No renewal, no logging in again.
+
+`setup-token` grants a single OAuth scope, `user:inference`, so Anthropic will not let it read the
+profile endpoint. Practically: that account has no email and no plan of its own, and shows the name
+you gave it. Its **quota meters still work** — they come from a different source, see below.
+
+### Import a live session
+
+Sign in with the account in Claude Code (`claude`, then `/login`), then press **import**. Those
+accounts carry the full scope set, so they show email, plan and organisation. The cost is that you
+must log in once per account, and their refresh token dies after ~29 days of not opening the panel.
+
+To capture a second account without disturbing the session you are using, start it in a separate
+config directory and import with **Shift + click** on **import**:
+
+```bash
+CLAUDE_CONFIG_DIR=/tmp/second-account claude
+```
+
+Adding the same account twice updates it in place. It never creates duplicates.
+
+## Usage meters
+
+Refreshed **every 5 minutes**, and on **refresh**. Where the numbers come from depends on the
+token, and so does what they cost you:
+
+| Account type | Source | Cost per reading |
+|---|---|---|
+| Imported (full scope) | `/api/oauth/usage`, the same endpoint `/usage` uses | **0 tokens** |
+| Pasted `setup-token` | `anthropic-ratelimit-unified-*` response headers | **8 in + 1 out** |
+
+The usage endpoint answers an inference-only token `403` forever, so for those accounts the panel
+never calls it — spending one of the app's ~5 requests per 5 minutes on a guaranteed failure would
+starve the accounts that *can* answer. Instead it reads the quota off the rate-limit headers that
+come back on any inference call. The free endpoints (`count_tokens`, `/v1/models`) carry no such
+headers, so something has to be spent: the floor is Haiku with `max_tokens: 1` and a
+one-character prompt. At one probe per account every five minutes that is roughly **2,600 tokens a
+day**, against a window measured in hundreds of thousands.
+
+When it cannot refresh, it shows the last known reading marked as stale rather than blanking the
+row. Switching accounts works regardless.
+
+## Switching
+
+Press **swap**. In order, it:
+
+1. Warns if Claude Code is open — the change lands on **new** sessions, not the running one.
+2. Backs up the credentials and `~/.claude.json` to `data/backups/` (last 20 kept).
+3. Refreshes the token first if it is about to expire.
+4. Rewrites **only** `claudeAiOauth` in the credentials and `oauthAccount` in `~/.claude.json`.
+   Everything else — `mcpOAuth`, your projects, history, MCP servers — is left untouched.
+5. Verifies the new token against the API, and **rolls both files back** if anything fails.
+
+Each environment (host, and each WSL distro) tracks its own active account and has its own
+**import** button.
+
+## Docker
+
+The image is Linux and runs anywhere Docker does — including Apple Silicon, since `node:22-alpine`
+is multi-arch. What changes per host is what you mount and what stops working.
+
+```bash
+docker compose up -d      # then open http://127.0.0.1:7373
+```
+
+Or by hand, publishing on a port of your choice:
+
+```bash
+docker build -t claudeswaper .
+docker run -d --name claudeswaper \
+  -p 127.0.0.1:7373:7373 \
+  -v "$PWD/data:/app/data" \
+  -v "$HOME/.claude:/home/node/.claude" \
+  -v "$HOME/.claude.json:/home/node/.claude.json" \
+  claudeswaper
+```
+
+**Publish on `127.0.0.1` only.** The server listens on `0.0.0.0` *inside* the container because it
+has no choice, so the loopback guarantee has to be imposed on the host side. Dropping the
+`127.0.0.1:` prefix puts a panel that handles paid credentials on every interface of your machine.
+
+**Mount the same `data/` you already use.** A named volume gives the container a separate, empty
+store — right for a server that only ever runs Docker, baffling on a machine where you already
+added accounts.
+
+**Do not run the container and `node server.js` at the same time.** The rate floor is per process;
+two instances double the outbound rate and rate-limit each other.
+
+Per host:
+
+| Host | Notes |
+|---|---|
+| **Linux** | Everything in the table below works. If the mounted files are owned by another uid, add `--user "$(id -u):$(id -g)"`. |
+| **macOS** | Bind mounts work, but Claude Code stores credentials in the **login Keychain**, which a Linux container cannot reach. Swapping only works if your credentials live in `~/.claude/.credentials.json` as a file. |
+| **Windows** | Set `$env:CLAUDE_HOME = $env:USERPROFILE` before `docker compose up`, since `$HOME` is not what compose expects. |
+
+What a container cannot do, on any host:
+
+| Feature | In a container |
+|---|---|
+| Panel, meters, quota probe, adding accounts | works |
+| Swapping the host's credentials | works, if you mounted `~/.claude` |
+| Telling whether Claude Code is running | **no** — it sees only the container's processes |
+| WSL targets | **no** — `wsl.exe` does not exist inside |
+
+The panel says both of those on screen instead of reporting "not running" for something it simply
+cannot see.
+
+## Security
+
+- Listens on **loopback only** and requires its own header on every API request, so no page open in
+  your browser can drive it. DNS rebinding is rejected by validating the `Host` **hostname**.
+- Tokens live in `data/`, locked down with a real NTFS ACL on Windows, and **never** leave the
+  process: the view that reaches the browser contains no token, and anything matching `sk-ant-*` is
+  scrubbed before it can reach a log or a response body. There is a test that fails the build if a
+  token literal appears in any source file.
+- **No OAuth login inside the panel.** You mint tokens with `claude setup-token` in your own
+  terminal and paste them; the panel never drives an authorisation flow.
+- A pasted token is a **year-long** secret, far longer-lived than the ~8 hours of an imported one.
+  The field is a password input and is emptied when the form closes.
+- Every switch is preceded by a backup, and any failure after the first write rolls both files back.
+
+## Limitations
+
+- **`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and `CLAUDE_CODE_OAUTH_TOKEN` outrank the
+  credentials file.** While any of them is set, switching is a silent no-op: the panel reports
+  success, the file changes, and Claude Code keeps using the variable. The panel detects this and
+  says so, in the UI and in `/api/health`.
+- **Accounts added by token show no email, plan or organisation.** There is no way to resolve an
+  inference-only token to an identity, and the panel does not invent one — it shows the name you
+  gave it.
+- **Remote Control does not work with `setup-token` accounts.** Anthropic documents it: such a
+  token "can only make model requests". Claude Code then prints `Remote Control disconnected —
+  /login`, which reads like a login prompt but is not: the session itself is authenticated.
+  Silence it with `"disableRemoteControl": true` in `~/.claude/settings.json`.
+- **The usage endpoint is rate-limited** to roughly 5 requests per 5 minutes for the whole app.
+  That is why there is a hard floor between outbound calls and a persisted, escalating cooldown.
+
+## Troubleshooting
+
+| Symptom | Cause |
+|---|---|
+| Switching "works" but Claude Code keeps the old account | An overriding environment variable. See [Limitations](#limitations). |
+| `Remote Control disconnected — /login` | Expected with `setup-token` accounts. Not a broken session. |
+| `Not logged in - Please run /login` | The credentials blob has no `scopes`. Never write it empty. |
+| Meters empty and marked stale | Rate-limited. It recovers on its own; switching is unaffected. |
+| `Ya hay algo escuchando en…` on start-up | Another instance. Deliberate — the port never hops. |
+
+## Development
+
+```bash
+node test.js        # 49 checks, ~2 s, no external network
+```
+
+The suite stubs every `fetch`, so a run never spends the usage endpoint's budget. Each module also
+has its own self-check (`node lib/swap.js`). Internals — the endpoints, the token model, the swap
+and its rollback — are documented in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## License
+
+[MIT](LICENSE)

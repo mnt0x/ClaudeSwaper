@@ -13,7 +13,14 @@ const swap = require('./lib/swap');
 const credentials = require('./lib/credentials');
 const targets = require('./lib/targets');
 
+// The host the BROWSER uses, and the only one the Host-header allowlist accepts. Kept separate
+// from the bind address on purpose: a container has to listen on all of its own interfaces to be
+// reachable at all, but that must not widen what this server accepts as a legitimate origin.
 const HOST = '127.0.0.1';
+// Where the socket actually binds. Loopback everywhere except inside a container, where the
+// Dockerfile sets 0.0.0.0. The loopback guarantee then moves outward, to how the port is
+// published:  -p 127.0.0.1:7373:7373  — see the README.
+const BIND = process.env.SWAPER_BIND || HOST;
 const BASE_PORT = Number(process.env.PORT) || 7373;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_BODY = 1024 * 1024;
@@ -67,14 +74,39 @@ function readBody(req) {
  * with a loop of <img> tags), and /api/usage spends the app's entire request budget for
  * the whole 5-minute window.
  */
-function guard(req, res, port, pathname) {
-  const host = req.headers.host || '';
-  const allowedHosts = [`${HOST}:${port}`, `localhost:${port}`];
-  if (!allowedHosts.includes(host)) { fail(res, 403, 'Host no permitido'); return false; }
+// Loopback by NAME. The port is deliberately not part of this: a container listens on 7373 and
+// is published as whatever the user chose, so the Host the browser sends carries the PUBLISHED
+// port, which this process has no way of knowing. Pinning the port there rejected every
+// containerised request with "Host no permitido".
+//
+// Dropping it costs nothing, because the port was never what defended anything. The attack this
+// guards against is DNS rebinding: a page on evil.com whose domain resolves to 127.0.0.1, so the
+// browser really does connect to this socket. What gives it away is the Host header — it says
+// "evil.com", because the browser fills it from the URL the page used. A hostname check catches
+// that; the port never entered into it. An ordinary cross-origin fetch is stopped twice over,
+// by the Origin check below and by the X-Swaper header a cross-site request cannot set.
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+
+/** "127.0.0.1:27387" -> "127.0.0.1", "[::1]:7373" -> "[::1]". Empty when unparseable. */
+function hostnameOf(value) {
+  const s = String(value == null ? '' : value).trim();
+  if (!s) return '';
+  if (s[0] === '[') { const end = s.indexOf(']'); return end < 0 ? '' : s.slice(0, end + 1); }
+  return s.split(':')[0];
+}
+const isLoopback = (value) => LOOPBACK.has(hostnameOf(value));
+
+function guard(req, res, pathname) {
+  if (!isLoopback(req.headers.host)) { fail(res, 403, 'Host no permitido'); return false; }
 
   const origin = req.headers.origin;
-  if (origin && !allowedHosts.some((h) => origin === `http://${h}`)) {
-    fail(res, 403, 'Origen no permitido'); return false;
+  if (origin) {
+    let ok = false;
+    try {
+      const u = new URL(origin);
+      ok = (u.protocol === 'http:' || u.protocol === 'https:') && isLoopback(u.host);
+    } catch { ok = false; }
+    if (!ok) { fail(res, 403, 'Origen no permitido'); return false; }
   }
   // Static assets are exempt: the browser loads /style.css with no say in its headers.
   if (pathname.startsWith('/api/') && req.headers['x-swaper'] !== '1') {
@@ -127,6 +159,11 @@ async function handleApi(req, res, url, port) {
       platform: process.platform,
       credentialsBackend: credentials.describeBackend(),
       overridingEnv: overridingEnv(),
+      // What this process genuinely cannot do from where it is running. The UI shows it rather
+      // than silently degrading, because "0 procesos" and "no puedo verlos" look identical on a
+      // screen and mean opposite things.
+      container: P.inContainer(),
+      unavailable: P.inContainer() ? ['processDetection', 'wslTargets'] : [],
       paths: { claudeJson: P.claudeJsonPath(), data: P.dataDir() },
     });
   }
@@ -361,7 +398,7 @@ function createServer(port) {
       return fail(res, 400, 'URL inválida');
     }
     try {
-      if (!guard(req, res, port, url.pathname)) return;
+      if (!guard(req, res, url.pathname)) return;
       if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url, port);
       if (req.method !== 'GET') return fail(res, 405, 'Método no permitido');
       return serveStatic(res, url.pathname);
@@ -387,12 +424,19 @@ function listen(port) {
     console.error(`No se pudo abrir el puerto ${port}: ${err.message}`);
     process.exit(1);
   });
-  server.listen(port, HOST, () => {
+  server.listen(port, BIND, () => {
     const url = `http://${HOST}:${port}`;
     console.log(`\n  ClaudeSwaper  ->  ${url}`);
     console.log(`  datos: ${P.dataDir()}`);
     // Inherited from the shell, this silently redirects every read and write to a throwaway
     // config — and the README teaches people to set it for an isolated login.
+    if (P.inContainer()) {
+      console.log('  contenedor: sin detección de procesos ni targets WSL (frontera del contenedor)');
+    }
+    if (BIND !== HOST) {
+      console.log(`  AVISO: escuchando en ${BIND}, no solo en el loopback.`);
+      console.log('         Publica el puerto solo en 127.0.0.1 del host, o lo expones a tu red.');
+    }
     const overriding = overridingEnv();
     if (overriding.length) {
       console.log(`  AVISO: ${overriding.join(', ')} está definido y GANA al fichero de credenciales.`);

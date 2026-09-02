@@ -72,6 +72,22 @@
   <p>Sin respuesta del servidor local. ¿Se ha cerrado <code>node server.js</code>?</p>
 </div>
 
+<!-- Dos avisos que solo el servidor puede saber, y que en pantalla son indistinguibles de
+     "todo va bien" si no se dicen: correr dentro de un contenedor (no ve los procesos del host
+     ni sus distros WSL) y tener una variable de entorno que gana al fichero de credenciales,
+     que convierte cada swap en un no-op silencioso. Se piden UNA vez, al arrancar. -->
+<div class="notice notice-warn" id="banner-container" hidden>
+  <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-alert"/></svg>
+  <p>En contenedor: no puede ver si Claude Code está abierto ni ofrecer targets de WSL. El swap
+     sobre el host sí funciona si montaste su <code>~/.claude</code>.</p>
+</div>
+
+<div class="notice notice-error" id="banner-env" hidden>
+  <svg class="ico" viewBox="0 0 18 18" aria-hidden="true"><use href="#i-alert"/></svg>
+  <p><strong id="env-vars"></strong> gana al fichero de credenciales: mientras siga definida,
+     los cambios de cuenta <strong>no tendrán efecto</strong> en Claude Code.</p>
+</div>
+
 <!-- Isolated-login import. An inline field, not a prompt: it stays on the page, it can
      be styled, and Escape or cancel returns you exactly where you were. -->
 <form class="field-row" id="dir-form" hidden>
