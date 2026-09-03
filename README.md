@@ -149,21 +149,25 @@ switch account without leaving the terminal. They talk to the running panel over
 
 | Command | What you type | What it does |
 |---|---|---|
-| `/swapper-usage` | `/swapper-usage` | Lists every account with its 5-hour and weekly quota and when each resets, marks the active one, and says which is freest. Read-only. |
+| `/swapper-usage` | `/swapper-usage` | One line per account with its 5-hour and weekly quota; marks the one in use (and when its session resets) and the freest one to switch to. Read-only. |
 | `/swapper <name>` | `/swapper Manuel` · `/swapper devs@…` | Switches the host's active account to the one named (label or email), then shows what it has left. |
 | `/swapper-auto` | `/swapper-auto on` · `off` · `status` | Turns **automatic rotation** on or off, and shows the whole rotation queue: the account in use, which is next, and any excluded one with the reason. |
 
-`/swapper-usage` prints an aligned meter per account:
+`/swapper-usage` prints one aligned line per account — `●` in use, `→` the freest to switch to:
 
 ```
-  ● Castillo            carloscastilloazr@gmail.com
-      5h ████████░░  82%     7d █████░░░░░  48%   · EN USO  sesión casi llena
+  Swapper · host                   5h     7d
 
-    Manuel Cordero      mcordero@bouncer.digital
-      5h ░░░░░░░░░░   0%     7d ░░░░░░░░░░   0%
-
-  Activa: Castillo (82% / 48%)   ·   más libre: Manuel Cordero — /swapper Manuel
+  ● Cyberxia                      31%    53%   en uso · reset 4h 12m
+  → Castillo · carloscastilloazr   0%    48%   más libre
+    Manuel Cordero                 0%     0%
+    Castillo · ccastillo          81%    71%   casi
+    CTO                          100%    68%   tope
 ```
+
+Two accounts sharing a label are told apart by the email's local part. `/swapper-auto` uses the
+same shape: `●` the account in use, `→ siguiente` the one it would rotate to, and `excluida · why`
+on any it will skip.
 
 `/swapper Manuel` matches by name or email — if it is ambiguous (two accounts labelled the same)
 it lists them and asks for the email rather than guessing. The change lands on **new** Claude Code
