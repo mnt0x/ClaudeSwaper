@@ -35,10 +35,9 @@ async function api(path, { method = 'GET', body } = {}) {
 /* ---------- colour (truecolor ANSI; NO_COLOR turns it off) ---------- */
 
 const COLOR = !process.env.NO_COLOR;
-// The panel's palette: phosphor green + the severity ramp. One language of colour.
 const RGB = {
   phos: [0, 255, 156], ok: [0, 255, 156], medium: [255, 204, 77],
-  high: [255, 152, 56], crit: [255, 92, 114], dim: [122, 157, 141], faint: [60, 80, 70],
+  high: [255, 152, 56], crit: [255, 92, 114], dim: [122, 157, 141], faint: [55, 78, 68],
 };
 function c(name, s) {
   if (!COLOR) return s;
@@ -47,7 +46,7 @@ function c(name, s) {
 }
 const bold = (s) => (COLOR ? `\x1b[1m${s}\x1b[0m` : s);
 
-// The same thresholds the app recomputes locally, so colour == the meter's severity.
+// Same thresholds the app recomputes locally, so colour == the meter's severity.
 function sev(p) {
   if (p == null) return 'dim';
   if (p >= 95) return 'crit';
@@ -56,38 +55,62 @@ function sev(p) {
   return 'ok';
 }
 
-/* ---------- formatting ---------- */
+/* ---------- width-aware layout (padding ignores colour codes) ---------- */
 
-const BAR_W = 10;
+const stripAnsi = (s) => String(s).replace(/\x1b\[[0-9;]*m/g, '');
+const vlen = (s) => stripAnsi(s).length;
+const padEndV = (s, n) => s + ' '.repeat(Math.max(0, n - vlen(s)));
+const padStartV = (s, n) => ' '.repeat(Math.max(0, n - vlen(s))) + s;
+
+const W = 66; // visible width inside the frame
+const F = (s) => c('faint', s);
+function frameTop(title) {
+  const t = ` ${title} `;
+  return '  ' + F('╭─') + c('phos', bold(t)) + F('─'.repeat(Math.max(0, W - vlen(t) - 1)) + '╮');
+}
+function frameTopRight(title, right) {
+  const t = ` ${title} `;
+  const r = ` ${right} `;
+  const mid = Math.max(0, W - vlen(t) - vlen(r) - 1);
+  return '  ' + F('╭─') + c('phos', bold(t)) + F('─'.repeat(mid)) + c('dim', r) + F('╮');
+}
+const frameBottom = () => '  ' + F('╰' + '─'.repeat(W) + '╯');
+const row = (content) => '  ' + F('│') + ' ' + padEndV(content, W - 2) + ' ' + F('│');
+const blank = () => row('');
+
+/* ---------- meters ---------- */
+
+const BAR_W = 12;
 function bar(p) {
-  const name = sev(p);
   if (p == null) return c('faint', '·'.repeat(BAR_W));
   const filled = Math.max(0, Math.min(BAR_W, Math.round((p / 100) * BAR_W)));
-  return c(name, '█'.repeat(filled)) + c('faint', '░'.repeat(BAR_W - filled));
+  return c(sev(p), '█'.repeat(filled)) + c('faint', '░'.repeat(BAR_W - filled));
 }
-function pctStr(p) {
-  const s = (p == null ? '  —' : `${p}%`).padStart(4);
+const pctStr = (p) => {
+  const s = (p == null ? '—' : `${p}%`).padStart(4);
   return p == null ? c('dim', s) : c(sev(p), bold(s));
-}
-const level = (p) => (p == null ? '' : p >= 95 ? 'llena' : p >= 80 ? 'casi llena' : '');
-function trunc(s, n) { s = String(s || ''); return s.length <= n ? s : s.slice(0, n - 1) + '…'; }
+};
 
-// One account's two-line block: identity, then the two meters aligned under it.
-function block(acc, u, activeId) {
+// Two rows inside the frame for one account.
+function accountRows(acc, u, activeId) {
   const active = acc.id === activeId;
   const s = u && u.ok ? (u.session ? u.session.percent : null) : null;
   const w = u && u.ok ? (u.weekly ? u.weekly.percent : null) : null;
-  const dot = active ? c('phos', '●') : ' ';
-  const name = active ? c('phos', bold(trunc(acc.label, 18).padEnd(18))) : bold(trunc(acc.label, 18).padEnd(18));
-  const head = `  ${dot} ${name}  ${c('dim', trunc(acc.email || '', 34))}`;
+  const dot = active ? c('phos', '●') : c('faint', '·');
+  const name = active ? c('phos', bold(acc.label)) : bold(acc.label);
+  let tag = active ? c('phos', 'EN USO') : '';
+  if (u && !u.ok) tag = c('crit', u.needsRelogin ? 'caducada' : 'sin datos');
+  else if (s != null && s >= 95) tag = c('crit', (tag ? tag + ' ' : '') + '· tope');
+  else if (s != null && s >= 80) tag = c('high', (tag ? tag + ' ' : '') + '· casi');
 
-  let estado = active ? c('phos', '· EN USO') : '';
-  if (u && !u.ok) estado = c('crit', `· ${u.needsRelogin ? 'token caducado — reimporta' : (u.error || 'sin datos')}`);
-  else if (level(s)) estado = `${estado ? estado + '  ' : '· '}${c(sev(s), 'sesión ' + level(s))}`.trim();
-
-  const meters = `      ${c('dim', '5h')} ${bar(s)} ${pctStr(s)}     ${c('dim', '7d')} ${bar(w)} ${pctStr(w)}   ${estado}`.trimEnd();
-  return head + '\n' + meters;
+  const left = `${dot} ${name}`;
+  const idline = padEndV(left, 22) + c('dim', acc.email || c('faint', '—'));
+  const meters = `   ${c('dim', 'S')} ${bar(s)} ${pctStr(s)}   ${c('dim', 'W')} ${bar(w)} ${pctStr(w)}`;
+  const metersTagged = padEndV(meters, W - 2 - vlen(tag)) + tag;
+  return [row(idline), row(metersTagged)];
 }
+
+/* ---------- usage ---------- */
 
 async function cmdUsage() {
   const [{ accounts, activeId }, usage] = await Promise.all([
@@ -96,14 +119,26 @@ async function cmdUsage() {
   ]);
   if (!accounts.length) { console.log('\n  No hay cuentas todavía. Añádelas en el panel (import o pegar token).\n'); return; }
 
-  console.log(`\n  ${c('phos', bold('LLMSwapper'))} ${c('dim', '· uso disponible por cuenta            (entorno: host)')}\n`);
   const ord = [...accounts].sort((a, b) => {
     if ((a.id === activeId) !== (b.id === activeId)) return a.id === activeId ? -1 : 1;
     const pa = (usage[a.id] && usage[a.id].ok && usage[a.id].session) ? usage[a.id].session.percent : 999;
     const pb = (usage[b.id] && usage[b.id].ok && usage[b.id].session) ? usage[b.id].session.percent : 999;
     return pa - pb;
   });
-  for (const a of ord) console.log(block(a, usage[a.id], activeId) + '\n');
+
+  const lines = [];
+  ord.forEach((a, i) => {
+    lines.push(...accountRows(a, usage[a.id], activeId));
+    if (i < ord.length - 1) lines.push(blank());
+  });
+
+  console.log('');
+  console.log(frameTopRight('LLMSwapper · uso disponible', 'host'));
+  console.log(blank());
+  for (const l of lines) console.log(l);
+  console.log(blank());
+  console.log(row(c('faint', 'S sesión 5h   W semana 7d   ') + c('ok', '█') + c('faint', ' libre  ') + c('high', '█') + c('faint', ' casi  ') + c('crit', '█') + c('faint', ' tope')));
+  console.log(frameBottom());
 
   const readable = accounts
     .map((a) => ({ a, u: usage[a.id] }))
@@ -113,11 +148,11 @@ async function cmdUsage() {
   const freest = readable.filter((x) => x.id !== activeId && x.s < 90 && x.w < 90).sort((x, y) => x.s - y.s)[0];
   const full = readable.filter((x) => x.id !== activeId && x.s >= 80).map((x) => `${x.label} ${x.s}%`);
   const parts = [];
-  if (active) parts.push(`${c('dim', 'Activa:')} ${bold(active.label)} ${c(sev(active.s), `(${active.s}% / ${active.w}%)`)}`);
-  if (freest) parts.push(`${c('dim', 'más libre:')} ${c('ok', bold(freest.label))} ${c('dim', `— /swapper ${(freest.label || '').split(' ')[0]}`)}`);
-  else parts.push(c('dim', 'ninguna otra con margen bajo el 90%'));
-  if (full.length) parts.push(`${c('dim', 'evita:')} ${c('high', full.join(', '))}`);
-  console.log('  ' + parts.join(c('faint', '   ·   ')) + '\n');
+  if (active) parts.push(`${c('dim', 'activa')} ${bold(active.label)} ${c(sev(active.s), `${active.s}%/${active.w}%`)}`);
+  if (freest) parts.push(`${c('dim', 'salta a')} ${c('ok', bold(freest.label))} ${c('faint', `/swapper ${(freest.label || '').split(' ')[0]}`)}`);
+  else parts.push(c('dim', 'ninguna otra con margen'));
+  if (full.length) parts.push(`${c('dim', 'evita')} ${c('high', full.join(', '))}`);
+  console.log('   ' + parts.join(c('faint', '  ·  ')) + '\n');
 }
 
 /* ---------- swap ---------- */
@@ -136,39 +171,40 @@ function findAccount(accounts, query) {
   return hits[0];
 }
 
-async function meterLine(id) {
-  try {
-    const u = await api(`/api/usage?id=${encodeURIComponent(id)}`);
-    if (u && u.ok) {
-      const s = u.session ? u.session.percent : null;
-      const w = u.weekly ? u.weekly.percent : null;
-      console.log(`      ${c('dim', '5h')} ${bar(s)} ${pctStr(s)}     ${c('dim', '7d')} ${bar(w)} ${pctStr(w)}`);
-    } else if (u) console.log(c('dim', `      uso: ${u.error || 'no disponible'}`));
-  } catch { /* usage is a nicety; a swap that worked must not read as failed */ }
+async function usageFor(id) {
+  try { return await api(`/api/usage?id=${encodeURIComponent(id)}`); } catch { return null; }
 }
 
 async function cmdSwap(args) {
   const { accounts, activeId } = await api('/api/accounts?target=host');
   const acc = findAccount(accounts, args.join(' '));
-  if (acc.id === activeId) {
-    console.log(`\n  ${c('phos', '●')} ${bold(acc.label)}${acc.email ? c('dim', '  ' + acc.email) : ''} ya es la cuenta activa en el host.`);
-    await meterLine(acc.id);
-    console.log('');
-    return;
-  }
-  const r = await api('/api/swap', { method: 'POST', body: { id: acc.id, target: 'host' } });
-  console.log(`\n  ${c('ok', '✓')} ${c('dim', 'Cuenta activa:')} ${c('phos', bold(r.account.label))}${r.account.email ? c('dim', '  ' + r.account.email) : ''}${r.verified ? c('dim', '   (token verificado)') : ''}`);
-  await meterLine(acc.id);
-  for (const wmsg of r.warnings || []) console.log(c('medium', `  · ${wmsg}`));
-  console.log(c('dim', '  El cambio se aplica a las sesiones NUEVAS de Claude Code (una ya abierta conserva su token).\n'));
+  const already = acc.id === activeId;
+  let r = { account: acc, verified: false, warnings: [] };
+  if (!already) r = await api('/api/swap', { method: 'POST', body: { id: acc.id, target: 'host' } });
+  const u = await usageFor(acc.id);
+
+  const out = [
+    frameTop(already ? 'Ya activa' : 'Cuenta cambiada'),
+    blank(),
+    ...accountRows({ id: acc.id, label: r.account.label, email: r.account.email }, u, acc.id),
+    blank(),
+    ...(r.verified ? [row(c('ok', '✓ token verificado contra la API'))] : []),
+    row(c('dim', 'Se aplica a sesiones NUEVAS; una abierta conserva su token.')),
+    frameBottom(),
+  ];
+  console.log('\n' + out.join('\n'));
+  for (const wmsg of r.warnings || []) console.log('   ' + c('medium', '· ' + wmsg));
+  console.log('');
 }
 
 /* ---------- auto ---------- */
 
-function autoBrief(x) {
-  if (!x) return c('dim', '—');
+function autoRows(labelLeft, x) {
+  if (!x) return [row(padEndV(c('dim', labelLeft), 20) + c('dim', '—'))];
   const s = x.sessionPercent, w = x.weeklyPercent;
-  return `${bold(x.label)}${x.email ? c('dim', '  ' + x.email) : ''}\n      ${c('dim', '5h')} ${bar(s)} ${pctStr(s)}     ${c('dim', '7d')} ${bar(w)} ${pctStr(w)}`;
+  const id = padEndV(c('dim', labelLeft), 20) + bold(x.label) + (x.email ? c('dim', '  ' + x.email) : '');
+  const meters = `   ${c('dim', 'S')} ${bar(s)} ${pctStr(s)}   ${c('dim', 'W')} ${bar(w)} ${pctStr(w)}`;
+  return [row(id), row(meters)];
 }
 
 async function cmdAuto(args) {
@@ -179,15 +215,19 @@ async function cmdAuto(args) {
   else st = await api('/api/auto');
 
   const estado = st.enabled ? c('ok', bold('● ACTIVADA')) : c('dim', '○ desactivada');
-  console.log(`\n  ${c('phos', 'Rotación automática:')} ${estado}     ${c('dim', `entorno ${st.target}     umbral ${st.threshold}%`)}\n`);
-  console.log(`  ${c('dim', 'Cuenta actual   ')} ${autoBrief(st.current)}`);
-  console.log(`  ${c('dim', 'Siguiente cuenta')} ${st.next ? autoBrief(st.next) : c('dim', '— (ninguna con margen bajo el ' + st.threshold + '%)')}`);
-  if (st.enabled) {
-    console.log(c('dim', `\n  Cuando la sesión 5h de la actual llegue al ${st.threshold}%, el panel cambia solo a la siguiente.`));
-  } else {
-    console.log(`\n  ${c('dim', 'Actívala con')}  ${c('phos', '/swapper-auto on')}`);
-  }
-  console.log('');
+  const out = [
+    frameTopRight('Rotación automática', `host · umbral ${st.threshold}%`),
+    blank(),
+    row(padEndV(c('dim', 'estado'), 20) + estado),
+    blank(),
+    ...autoRows('cuenta actual', st.current),
+    blank(),
+    ...autoRows('siguiente', st.next),
+    frameBottom(),
+  ];
+  console.log('\n' + out.join('\n'));
+  if (st.enabled) console.log('   ' + c('dim', `Al llegar la sesión al ${st.threshold}%, rota sola a la siguiente.`) + '\n');
+  else console.log('   ' + c('dim', 'Actívala con ') + c('phos', '/swapper-auto on') + '\n');
 }
 
 /* ---------- dispatch ---------- */
