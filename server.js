@@ -13,6 +13,7 @@ const swap = require('./lib/swap');
 const credentials = require('./lib/credentials');
 const targets = require('./lib/targets');
 const terminal = require('./lib/terminal');
+const auto = require('./lib/auto');
 
 // The host the BROWSER uses, and the only one the Host-header allowlist accepts. Kept separate
 // from the bind address on purpose: a container has to listen on all of its own interfaces to be
@@ -341,6 +342,21 @@ async function handleApi(req, res, url, port) {
     }
   }
 
+  // Automatic rotation: on/off + status. GET reports current + next account without
+  // spending any API budget (cached readings only); POST toggles it and the same status.
+  if (pathname === '/api/auto' && method === 'GET') {
+    return send(res, 200, await auto.status(deps));
+  }
+  if (pathname === '/api/auto' && method === 'POST') {
+    const body = await readBody(req);
+    const patch = {};
+    if (typeof body.enabled === 'boolean') patch.enabled = body.enabled;
+    if (typeof body.target === 'string' && body.target) patch.target = body.target;
+    if (Number.isFinite(body.threshold)) patch.threshold = body.threshold;
+    auto.set(patch);
+    return send(res, 200, await auto.status(deps));
+  }
+
   const idMatch = pathname.match(/^\/api\/accounts\/([A-Za-z0-9_]+)$/);
   if (idMatch) {
     const id = idMatch[1];
@@ -372,6 +388,9 @@ async function handleApi(req, res, url, port) {
  */
 const KEEPALIVE_EVERY_MS = 6 * 60 * 60 * 1000;   // every 6h
 const REFRESH_WHEN_UNDER_MS = 24 * 60 * 60 * 1000; // renew if under a day of life left
+// How often the auto-rotation monitor looks. The active-account usage read is cache-gated
+// (a real call only every ~15 min), so a 3-minute look is cheap and reacts promptly.
+const AUTO_EVERY_MS = 3 * 60 * 1000;
 
 async function keepTokensAlive() {
   // First, pick up a rotation Claude Code performed on its own. Renewing with a token it
@@ -476,6 +495,15 @@ function listen(port) {
     if (!process.env.NO_OPEN) oauth.openBrowser(url);
     keepAliveTick();
     setInterval(keepAliveTick, KEEPALIVE_EVERY_MS).unref();
+
+    // Auto-rotation monitor. Cheap when idle (reads the active account's cached usage);
+    // only swaps when it has genuinely crossed the threshold. Off unless the user enabled it.
+    const autoState = auto.load();
+    if (autoState.enabled) console.log(`  rotación automática: ON (${autoState.target}, umbral ${autoState.threshold}%)`);
+    const autoTick = () => auto.tick(deps).then((r) => {
+      if (r && r.rotated) console.log(`  rotación automática: ${r.from} -> ${r.to} (sesión ${r.at}% en ${r.target})`);
+    }).catch((err) => console.warn(`  rotación automática: ${oauth.scrub((err && err.message) || err)}`));
+    setInterval(autoTick, AUTO_EVERY_MS).unref();
   });
   const bye = () => { server.close(); process.exit(0); };
   process.on('SIGINT', bye);

@@ -21,7 +21,7 @@ function check(name, fn) {
 
 console.log('\nLLMSwapper self-check\n');
 
-for (const mod of ['lib/paths.js', 'lib/store.js', 'lib/usage.js', 'lib/swap.js', 'lib/credentials.js', 'lib/targets.js', 'lib/terminal.js']) {
+for (const mod of ['lib/paths.js', 'lib/store.js', 'lib/usage.js', 'lib/swap.js', 'lib/credentials.js', 'lib/targets.js', 'lib/terminal.js', 'lib/auto.js']) {
   check(`${mod} module self-check`, () => {
     execFileSync(process.execPath, [path.join(__dirname, mod)], { stdio: 'pipe', timeout: 30000 });
   });
@@ -278,6 +278,22 @@ check('el store adopta el par que Claude Code rotó por su cuenta, y solo si sab
     else process.env.CLAUDE_CONFIG_DIR = previous;
     fs.rmSync(P.accountsPath(), { force: true });
     fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+check('la rotación automática persiste su estado y clampa el umbral', () => {
+  const auto = require('./lib/auto');
+  try {
+    auto.set({ enabled: true, threshold: 85 });
+    let s = auto.load();
+    assert.strictEqual(s.enabled, true);
+    assert.strictEqual(s.threshold, 85);
+    auto.set({ threshold: 999 });          // fuera de rango -> clamp a 100
+    assert.strictEqual(auto.load().threshold, 100);
+    auto.set({ enabled: false });
+    assert.strictEqual(auto.load().enabled, false, 'apagar debe persistir');
+  } finally {
+    auto.set({ enabled: false, threshold: 90 }); // no dejar el sandbox con auto encendido
   }
 });
 

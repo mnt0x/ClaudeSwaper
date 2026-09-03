@@ -141,6 +141,34 @@ Nothing to configure - it runs `wsl.exe -l -q` and takes what comes back.
 - A dot means Claude Code is running there. Each environment tracks its own active account.
 - WSL is a Windows feature; elsewhere there is one tab.
 
+## Slash commands (Claude Code skills)
+
+Three skills drive the panel from inside any Claude Code session, so you can check quota or
+switch account without leaving the terminal. They talk to the running panel over
+`127.0.0.1:7373`; nothing works unless `node server.js` is up.
+
+| Command | What it does |
+|---|---|
+| `/swapper-usage` | Lists every account with its 5-hour and weekly quota, and which is active. |
+| `/swapper <name>` | Switches the host's active account to the one named (by label or email) and shows what it has left. |
+| `/swapper-auto [on\|off]` | Turns **automatic rotation** on or off, and shows the current and next account. |
+
+**Automatic rotation.** With it on, the server watches the active account and, the moment its
+5-hour session reaches **90%**, swaps to the freshest account that still has room — so your next
+`claude` launch lands on capacity you have not spent. It only rotates into an account below the
+threshold in both windows; if none qualifies it stays put. The state is on disk, so it survives a
+restart, and the rotation is the same audited swap (backup, verify, roll back) as a manual one.
+
+Install the skills once:
+
+```bash
+# from the repo, into your user skills folder
+cp -r skills/swapper skills/swapper-usage skills/swapper-auto ~/.claude/skills/
+```
+
+Each skill is self-contained (a `SKILL.md` and a small `swapper.mjs`) and needs only Node and the
+running panel.
+
 ## Other providers
 
 Claude Code ships today. The rest are candidates, in rough order of fit.

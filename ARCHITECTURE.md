@@ -307,9 +307,22 @@ only shape allowed to reach the browser; it strips `oauth` and `userID`.
 | POST | `/api/token/terminal` | `{}` -> `{ok, how}` - opens a terminal running `claude setup-token`; 409 in a container or without the CLI |
 | PATCH | `/api/accounts/:id` | `{label?, color?}` |
 | DELETE | `/api/accounts/:id` | `{ok}` |
+| GET | `/api/auto` | `{enabled, target, threshold, current, next}` - cached readings only, spends nothing |
+| POST | `/api/auto` | `{enabled?, target?, threshold?}` -> the same status |
 
 `target` defaults to `host`. Usage is target-independent (the token is the same in any
 environment), so `/api/usage*` take no target.
+
+## Automatic rotation
+
+`lib/auto.js` is an on/off monitor, off by default, its state persisted to `data/auto.json`.
+When on, a 3-minute interval reads the active account's usage — cache-gated, so a real API call
+only every ~15 min — and does nothing until the 5-hour session crosses the threshold (default
+90%). Only then does it sweep the other accounts to rank them, and swap to the freshest one that
+has room in **both** windows below the threshold; if none qualifies it stays put. A cooldown
+(3 min) after any rotation stops it swapping twice while readings lag. The swap is the ordinary
+`swap.swapTo` path — backup, verify, roll back — so "when" is the only thing this module decides;
+"how" is unchanged. The three `/swapper*` skills (`skills/`) are thin clients of these endpoints.
 
 `overridingEnv` lists any of `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and
 `CLAUDE_CODE_OAUTH_TOKEN` that are set. Each of them outranks the credentials file this app
