@@ -216,7 +216,8 @@ you use fits, an issue naming it and where it stores credentials is the most use
 
 ## Security
 
-- **Loopback only**, plus a required header on every API call. DNS rebinding is rejected by validating the `Host` hostname.
+- **Loopback only** by default, plus a required header on every API call. DNS rebinding is rejected by validating the `Host` hostname.
+- **Reaching it from another device is opt-in and unauthenticated.** `SWAPPER_BIND=0.0.0.0` widens the socket and `SWAPPER_ALLOWED_HOSTS=192.168.1.10,my-pc` widens the `Host` allowlist - both, or it stays closed. Only the hosts you name are let in; every other one, rebinding included, is still refused. There is no login, so anyone who can route to that address can swap, rename and delete your accounts. A tunnel or a private mesh is the better answer; this is for a network you trust.
 - Tokens live in `data/` (real NTFS ACL on Windows) and **never leave the process**. Anything matching `sk-ant-*` is scrubbed from logs and responses; a test fails the build if a token literal appears in any source file.
 - **No OAuth flow in the panel.** You mint tokens in your own terminal and paste them.
 - A pasted token is a **year-long** secret. The field is a password input, emptied when the form closes.

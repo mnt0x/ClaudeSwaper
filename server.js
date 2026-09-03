@@ -96,17 +96,32 @@ function hostnameOf(value) {
   if (s[0] === '[') { const end = s.indexOf(']'); return end < 0 ? '' : s.slice(0, end + 1); }
   return s.split(':')[0];
 }
-const isLoopback = (value) => LOOPBACK.has(hostnameOf(value));
+// SWAPPER_ALLOWED_HOSTS ensancha ese conjunto, separado por comas: "192.168.1.160,mi-pc".
+// Existe para abrir el panel a otro dispositivo de la red local, viene apagado y hay que
+// escribirlo a proposito, porque entrega el panel a cualquiera que sepa enrutar hasta esta
+// maquina: aqui no hay login, asi que quien llegue puede cambiar, renombrar y borrar cuentas.
+// Solo en una red en la que confies.
+const ALLOWED_HOSTS = new Set([
+  ...LOOPBACK,
+  ...String(process.env.SWAPPER_ALLOWED_HOSTS || '')
+    .split(',')
+    .map((s) => hostnameOf(s.trim().toLowerCase()))
+    .filter(Boolean),
+]);
+// Ya no se llama isLoopback: con SWAPPER_ALLOWED_HOSTS puesto devuelve true a proposito para una
+// direccion de LAN, y un predicado cuyo nombre niega lo que hace es como se equivoca el siguiente
+// que lo lea. Los nombres de host no distinguen mayusculas, de ahi el toLowerCase.
+const isAllowedHost = (value) => ALLOWED_HOSTS.has(hostnameOf(String(value == null ? '' : value).toLowerCase()));
 
 function guard(req, res, pathname) {
-  if (!isLoopback(req.headers.host)) { fail(res, 403, 'Host no permitido'); return false; }
+  if (!isAllowedHost(req.headers.host)) { fail(res, 403, 'Host no permitido'); return false; }
 
   const origin = req.headers.origin;
   if (origin) {
     let ok = false;
     try {
       const u = new URL(origin);
-      ok = (u.protocol === 'http:' || u.protocol === 'https:') && isLoopback(u.host);
+      ok = (u.protocol === 'http:' || u.protocol === 'https:') && isAllowedHost(u.host);
     } catch { ok = false; }
     if (!ok) { fail(res, 403, 'Origen no permitido'); return false; }
   }
@@ -482,6 +497,11 @@ function listen(port) {
     if (BIND !== HOST) {
       console.log(`  AVISO: escuchando en ${BIND}, no solo en el loopback.`);
       console.log('         Publica el puerto solo en 127.0.0.1 del host, o lo expones a tu red.');
+    }
+    if (ALLOWED_HOSTS.size > LOOPBACK.size) {
+      const extra = [...ALLOWED_HOSTS].filter((h) => !LOOPBACK.has(h));
+      console.log(`  AVISO: el panel acepta tambien ${extra.join(', ')}, no solo el loopback.`);
+      console.log('         No hay login: quien llegue a esa direccion maneja tus cuentas.');
     }
     const overriding = overridingEnv();
     if (overriding.length) {

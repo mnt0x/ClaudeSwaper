@@ -1028,6 +1028,50 @@ async function checkAsync(name, fn) {
     }
   });
 
+  await checkAsync('SWAPPER_ALLOWED_HOSTS abre el guard a una IP de LAN, y solo a esa', async () => {
+    // La lista se calcula al cargar el modulo, asi que no basta con poner la variable: hay que
+    // sacar server.js de la cache y volver a pedirlo. Es justo lo que hace un arranque real.
+    const http = require('node:http');
+    const antes = process.env.SWAPPER_ALLOWED_HOSTS;
+    const realFetch = global.fetch;
+    let server;
+    try {
+      process.env.SWAPPER_ALLOWED_HOSTS = '192.168.9.9, MI-PC';
+      delete require.cache[require.resolve('./server')];
+      server = require('./server').createServer(7994);
+      await new Promise((r) => server.listen(7994, '127.0.0.1', r));
+
+      // http.request y no fetch: Host es un "forbidden header name" y fetch lo descarta callando.
+      const pedir = (headers) => new Promise((resolve, reject) => {
+        const req = http.request({
+          host: '127.0.0.1', port: 7994, path: '/api/health', method: 'GET',
+          headers: { 'X-Swapper': '1', ...headers },
+        }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+        req.on('error', reject);
+        req.end();
+      });
+
+      assert.strictEqual(await pedir({ Host: '192.168.9.9:7373' }), 200, 'la IP permitida entra');
+      assert.strictEqual(await pedir({ Host: 'mi-pc' }), 200, 'los nombres de host no distinguen mayúsculas');
+      assert.strictEqual(await pedir({ Host: '127.0.0.1' }), 200, 'el loopback nunca se pierde');
+
+      // Lo que importa: ensanchar la lista NO la abre a cualquiera. Una IP vecina de la misma
+      // red sigue fuera, y el rebinding tambien, que era el ataque que el guard existe para parar.
+      assert.strictEqual(await pedir({ Host: '192.168.9.10:7373' }), 403, 'otra IP de la misma red, fuera');
+      assert.strictEqual(await pedir({ Host: 'evil.example' }), 403, 'DNS rebinding sigue cayendo');
+      assert.strictEqual(await pedir({ Origin: 'http://evil.example' }), 403, 'origen ajeno sigue fuera');
+      assert.strictEqual(await pedir({ Origin: 'http://192.168.9.9:7373' }), 200, 'origen permitido entra');
+    } finally {
+      if (server) await new Promise((r) => server.close(r));
+      if (antes === undefined) delete process.env.SWAPPER_ALLOWED_HOSTS;
+      else process.env.SWAPPER_ALLOWED_HOSTS = antes;
+      // Devolver el modulo a su estado normal para los tests que vengan detras.
+      delete require.cache[require.resolve('./server')];
+      require('./server');
+      global.fetch = realFetch;
+    }
+  });
+
   await checkAsync('POST /api/accounts/token rechaza un token inválido sin crear nada', async () => {
     const realFetch = global.fetch;
     const server = require('./server').createServer(7998);
