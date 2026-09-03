@@ -32,45 +32,73 @@ async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
-// A quota reading -> "12%" plus a marker so a full one stands out in plain text.
-function pct(p) {
-  if (p == null) return '  —';
-  const s = `${p}%`.padStart(4);
-  return p >= 90 ? `${s} !!` : p >= 80 ? `${s} !` : s;
-}
+/* ---------- formatting ---------- */
 
-async function usageLine(acc, u) {
-  const s = u && u.ok ? u.session : null;
-  const w = u && u.ok ? u.weekly : null;
-  const note = u && !u.ok ? (u.needsRelogin ? 'token caducado' : (u.error || 'sin datos')) : '';
-  return { s: s ? s.percent : null, w: w ? w.percent : null, note };
+const BAR_W = 10;
+function bar(p) {
+  if (p == null) return '·'.repeat(BAR_W);
+  const filled = Math.max(0, Math.min(BAR_W, Math.round((p / 100) * BAR_W)));
+  return '█'.repeat(filled) + '░'.repeat(BAR_W - filled);
+}
+const pctStr = (p) => (p == null ? '  —' : `${p}%`).padStart(4);
+const level = (p) => (p == null ? '' : p >= 95 ? 'llena' : p >= 80 ? 'casi llena' : '');
+function trunc(s, n) { s = String(s || ''); return s.length <= n ? s : s.slice(0, n - 1) + '…'; }
+
+// One account's two-line block: identity, then the two meters aligned under it.
+function block(acc, u, activeId) {
+  const active = acc.id === activeId;
+  const s = u && u.ok ? (u.session ? u.session.percent : null) : null;
+  const w = u && u.ok ? (u.weekly ? u.weekly.percent : null) : null;
+  const dot = active ? '●' : ' ';
+  const head = `  ${dot} ${trunc(acc.label, 18).padEnd(18)}  ${trunc(acc.email || '', 34)}`;
+  let estado = active ? '· EN USO' : '';
+  if (u && !u.ok) estado = `· ${u.needsRelogin ? 'token caducado — reimporta' : (u.error || 'sin datos')}`;
+  else if (level(s)) estado = `${estado ? estado + '  ' : '· '}sesión ${level(s)}`.trim();
+  const meters = `      5h ${bar(s)} ${pctStr(s)}     7d ${bar(w)} ${pctStr(w)}   ${estado}`.trimEnd();
+  return head + '\n' + meters;
 }
 
 async function cmdUsage() {
-  const [{ accounts }, usage] = await Promise.all([
+  const [{ accounts, activeId }, usage] = await Promise.all([
     api('/api/accounts?target=host'),
     api('/api/usage/all'),
   ]);
-  if (!accounts.length) { console.log('No hay cuentas. Añade una con /swapper (import o token) en el panel.'); return; }
+  if (!accounts.length) { console.log('\n  No hay cuentas todavía. Añádelas en el panel (import o pegar token).\n'); return; }
 
-  console.log('\n  CUENTA                          SESIÓN 5h   SEMANA 7d   ESTADO');
-  console.log('  ' + '─'.repeat(66));
-  for (const a of accounts) {
-    const u = usage[a.id];
-    const { s, w, note } = await usageLine(a, u);
-    const name = (a.label || a.email || a.id).padEnd(30).slice(0, 30);
-    const estado = a.isActive ? 'EN USO' : note ? note : '';
-    console.log(`  ${a.isActive ? '●' : ' '} ${name}  ${pct(s)}      ${pct(w)}     ${estado}`);
-  }
-  console.log('\n  ! ≥80%   !! ≥90%   ● = cuenta activa en el host\n');
+  console.log(`\n  LLMSwapper · uso disponible por cuenta            (entorno: host)\n`);
+  // Active first, then by most free session.
+  const ord = [...accounts].sort((a, b) => {
+    if ((a.id === activeId) !== (b.id === activeId)) return a.id === activeId ? -1 : 1;
+    const pa = (usage[a.id] && usage[a.id].ok && usage[a.id].session) ? usage[a.id].session.percent : 999;
+    const pb = (usage[b.id] && usage[b.id].ok && usage[b.id].session) ? usage[b.id].session.percent : 999;
+    return pa - pb;
+  });
+  for (const a of ord) console.log(block(a, usage[a.id], activeId) + '\n');
+
+  // Footer: one honest recommendation line.
+  const readable = accounts
+    .map((a) => ({ a, u: usage[a.id] }))
+    .filter((x) => x.u && x.u.ok && x.u.session)
+    .map((x) => ({ label: x.a.label, id: x.a.id, s: x.u.session.percent, w: x.u.weekly ? x.u.weekly.percent : 0 }));
+  const active = readable.find((x) => x.id === activeId);
+  const freest = readable.filter((x) => x.id !== activeId && x.s < 90 && x.w < 90).sort((x, y) => x.s - y.s)[0];
+  const full = readable.filter((x) => x.id !== activeId && x.s >= 80).map((x) => `${x.label} ${x.s}%`);
+  const parts = [];
+  if (active) parts.push(`Activa: ${active.label} (${active.s}% sesión / ${active.w}% semana)`);
+  if (freest) parts.push(`más libre: ${freest.label} (${freest.s}% sesión) — /swapper ${(freest.label || '').split(' ')[0]}`);
+  else parts.push('ninguna otra con margen bajo el 90%');
+  if (full.length) parts.push(`evita: ${full.join(', ')}`);
+  console.log('  ' + parts.join('   ·   ') + '\n');
 }
+
+/* ---------- swap ---------- */
 
 function findAccount(accounts, query) {
   const q = query.trim().toLowerCase();
   if (!q) throw new Error('Dime a qué cuenta cambiar: /swapper <nombre o email>');
   const exact = accounts.filter((a) => (a.label || '').toLowerCase() === q || (a.email || '').toLowerCase() === q);
-  const hits = (exact.length ? exact : accounts.filter((a) =>
-    (a.label || '').toLowerCase().includes(q) || (a.email || '').toLowerCase().includes(q)));
+  const hits = exact.length ? exact : accounts.filter((a) =>
+    (a.label || '').toLowerCase().includes(q) || (a.email || '').toLowerCase().includes(q));
   if (!hits.length) throw new Error(`Ninguna cuenta coincide con "${query}". Prueba /swapper-usage para ver los nombres.`);
   if (hits.length > 1) {
     const names = hits.map((a) => a.email ? `${a.label} <${a.email}>` : a.label).join(', ');
@@ -79,43 +107,60 @@ function findAccount(accounts, query) {
   return hits[0];
 }
 
-async function cmdSwap(args) {
-  const { accounts } = await api('/api/accounts?target=host');
-  const acc = findAccount(accounts, args.join(' '));
-  if (acc.isActive) { console.log(`\n  "${acc.label}" ya es la cuenta activa en el host.`); await showOne(acc.id); return; }
-  const r = await api('/api/swap', { method: 'POST', body: { id: acc.id, target: 'host' } });
-  console.log(`\n  ✓ Cuenta activa: ${r.account.label}${r.verified ? ' (token verificado)' : ''}`);
-  for (const w of r.warnings || []) console.log(`  · ${w}`);
-  await showOne(acc.id);
-  console.log('  El cambio se aplica a las sesiones NUEVAS de Claude Code.\n');
-}
-
-async function showOne(id) {
+async function meterLine(id) {
   try {
     const u = await api(`/api/usage?id=${encodeURIComponent(id)}`);
     if (u && u.ok) {
-      console.log(`  Uso disponible -> sesión ${pct(u.session && u.session.percent).trim()}, semana ${pct(u.weekly && u.weekly.percent).trim()}`);
-    } else if (u) {
-      console.log(`  Uso: ${u.error || 'no disponible'}`);
-    }
-  } catch { /* usage is a nicety; a swap that worked should not read as failed */ }
+      const s = u.session ? u.session.percent : null;
+      const w = u.weekly ? u.weekly.percent : null;
+      console.log(`      5h ${bar(s)} ${pctStr(s)}     7d ${bar(w)} ${pctStr(w)}`);
+    } else if (u) console.log(`      uso: ${u.error || 'no disponible'}`);
+  } catch { /* usage is a nicety; a swap that worked must not read as failed */ }
+}
+
+async function cmdSwap(args) {
+  const { accounts, activeId } = await api('/api/accounts?target=host');
+  const acc = findAccount(accounts, args.join(' '));
+  if (acc.id === activeId) {
+    console.log(`\n  ● ${acc.label}${acc.email ? '  ' + acc.email : ''} ya es la cuenta activa en el host.`);
+    await meterLine(acc.id);
+    console.log('');
+    return;
+  }
+  const r = await api('/api/swap', { method: 'POST', body: { id: acc.id, target: 'host' } });
+  console.log(`\n  ✓ Cuenta activa: ${r.account.label}${r.account.email ? '  ' + r.account.email : ''}${r.verified ? '   (token verificado)' : ''}`);
+  await meterLine(acc.id);
+  for (const wmsg of r.warnings || []) console.log(`  · ${wmsg}`);
+  console.log('  El cambio se aplica a las sesiones NUEVAS de Claude Code (una ya abierta conserva su token).\n');
+}
+
+/* ---------- auto ---------- */
+
+function autoBrief(x) {
+  if (!x) return '—';
+  const s = x.sessionPercent, w = x.weeklyPercent;
+  return `${x.label}${x.email ? '  ' + x.email : ''}\n      5h ${bar(s)} ${pctStr(s)}     7d ${bar(w)} ${pctStr(w)}`;
 }
 
 async function cmdAuto(args) {
   const verb = (args[0] || 'status').toLowerCase();
   let st;
-  if (verb === 'on' || verb === 'true' || verb === 'activar') st = await api('/api/auto', { method: 'POST', body: { enabled: true } });
-  else if (verb === 'off' || verb === 'false' || verb === 'desactivar') st = await api('/api/auto', { method: 'POST', body: { enabled: false } });
+  if (['on', 'true', 'activar', 'enciende'].includes(verb)) st = await api('/api/auto', { method: 'POST', body: { enabled: true } });
+  else if (['off', 'false', 'desactivar', 'apaga'].includes(verb)) st = await api('/api/auto', { method: 'POST', body: { enabled: false } });
   else st = await api('/api/auto');
 
-  const cur = st.current ? `${st.current.label} (sesión ${pct(st.current.sessionPercent).trim()})` : '—';
-  const nxt = st.next ? `${st.next.label} (sesión ${pct(st.next.sessionPercent).trim()})` : '— (ninguna con margen)';
-  console.log(`\n  Rotación automática: ${st.enabled ? 'ACTIVADA' : 'desactivada'}  ·  entorno ${st.target}  ·  umbral ${st.threshold}%`);
-  console.log(`  Cuenta actual   : ${cur}`);
-  console.log(`  Siguiente cuenta: ${nxt}`);
-  if (st.enabled) console.log(`  Cuando la sesión de la cuenta actual llegue al ${st.threshold}%, el panel cambia a la siguiente automáticamente.`);
+  console.log(`\n  Rotación automática: ${st.enabled ? '● ACTIVADA' : '○ desactivada'}     entorno ${st.target}     umbral ${st.threshold}%\n`);
+  console.log(`  Cuenta actual    ${autoBrief(st.current)}`);
+  console.log(`  Siguiente cuenta ${st.next ? autoBrief(st.next) : '— (ninguna con margen bajo el ' + st.threshold + '%)'}`);
+  if (st.enabled) {
+    console.log(`\n  Cuando la sesión 5h de la actual llegue al ${st.threshold}%, el panel cambia solo a la siguiente.`);
+  } else {
+    console.log(`\n  Actívala con  /swapper-auto on`);
+  }
   console.log('');
 }
+
+/* ---------- dispatch ---------- */
 
 const [cmd, ...args] = process.argv.slice(2);
 const run = { usage: cmdUsage, swap: () => cmdSwap(args), auto: () => cmdAuto(args), status: () => cmdAuto(['status']) };
