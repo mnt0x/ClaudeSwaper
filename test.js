@@ -522,6 +522,60 @@ async function checkAsync(name, fn) {
     }
   });
 
+  await checkAsync('un refresh forzado encadena hasta refrescar TODAS las cuentas, y solo una vez cada una', async () => {
+    // Regresión: el tope de 80 s deja pasar UNA llamada por barrido. Las demás volvían como
+    // stale sin retryInS, el frontend no reintentaba, y con 4 cuentas tardaban 40 min en
+    // estar frescas. Ahora vuelven `queued` con retryInS y quedan pendientes: el siguiente
+    // barrido (sin force) las refresca saltando la caché, y la cadena acaba cuando no queda
+    // ninguna pendiente — sin volver a pedir una cuenta recién refrescada.
+    const accounts = ['a', 'b', 'c'].map((n) => ({ id: `chain-${n}`, oauth: { accessToken: n, scopes: ['user:profile'] } }));
+    const realFetch = global.fetch;
+    const asked = [];
+    const body = JSON.stringify({ limits: [{ kind: 'session', percent: 5 }, { kind: 'weekly_all', percent: 5 }] });
+    try {
+      usage.invalidate();
+      usage.resetCooldown();
+      global.fetch = async (url, opts) => {
+        asked.push(String(opts.headers.Authorization).replace('Bearer ', ''));
+        return { ok: true, status: 200, headers: { get: () => null }, text: async () => body };
+      };
+      // Precalentar: las tres con caché (cada una en su turno)… y luego envejecerla más allá
+      // del suelo de 80 s, que es el estado real de un usuario pulsando refresh: caché vieja
+      // pero no caducada. Recién pedidas, un force las devolvería tal cual sin llamar.
+      for (let i = 0; i < 3; i++) { await usage.fetchAll(accounts, { force: true }); usage.resetCooldown(); }
+      for (const a of accounts) usage.prime(a.id, usage.cachedFor(a.id), Date.now() - 2 * usage.MIN_GAP_MS);
+      asked.length = 0;
+
+      // Barrido FORZADO: una entra, dos quedan en cola con retryInS.
+      const r1 = await usage.fetchAll(accounts, { force: true });
+      const queued = Object.values(r1).filter((u) => u.queued);
+      assert.strictEqual(asked.length, 1, 'el tope deja pasar una sola llamada');
+      assert.strictEqual(queued.length, 2, 'las otras dos vuelven en cola');
+      assert.ok(queued.every((u) => Number.isFinite(u.retryInS) && u.retryInS > 0), 'con retryInS para encadenar');
+
+      // Cadena: barridos SIN force (como hace el frontend) hasta que no quede nada en cola.
+      let rounds = 0;
+      let last = r1;
+      while (Object.values(last).some((u) => u.queued) && rounds < 5) {
+        usage.resetCooldown(); // levanta el suelo de 80 s; no es un test de esperar
+        last = await usage.fetchAll(accounts, {});
+        rounds++;
+      }
+      assert.strictEqual(asked.length, 3, `tres cuentas, tres llamadas en total (${asked.join(',')})`);
+      assert.strictEqual(new Set(asked).size, 3, 'cada cuenta exactamente una vez, ninguna repetida');
+      assert.ok(!Object.values(last).some((u) => u.queued), 'la cadena termina sin nada en cola');
+
+      // Y un barrido más SIN force no gasta nada: todas frescas.
+      usage.resetCooldown();
+      await usage.fetchAll(accounts, {});
+      assert.strictEqual(asked.length, 3, 'nada pendiente, nada que pedir');
+    } finally {
+      global.fetch = realFetch;
+      usage.invalidate();
+      usage.resetCooldown();
+    }
+  });
+
   await checkAsync('a 429 serves the last good reading instead of blanking the row', async () => {
     const account = { id: 'rl1', oauth: { accessToken: 'tok' } };
     const realFetch = global.fetch;
@@ -536,8 +590,11 @@ async function checkAsync(name, fn) {
       assert.ok(!good.stale);
 
       // Clear the rate floor: otherwise the next call is throttled locally and never
-      // reaches the API, so no 429 could come back.
+      // reaches the API, so no 429 could come back. And age the cache past the floor: a
+      // reading fetched seconds ago is handed back as-is on a forced refresh (nothing to
+      // learn from re-asking), which would also keep the 429 from ever happening.
       usage.resetCooldown();
+      usage.prime(account.id, good, Date.now() - 2 * usage.MIN_GAP_MS);
       global.fetch = async () => ({
         ok: false, status: 429,
         headers: { get: (h) => (h === 'retry-after' ? '5' : null) },

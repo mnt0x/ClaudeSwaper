@@ -92,6 +92,7 @@ const I18N = {
     'sync.min': 'Actualizado hace {m} min',
 
     'note.stale': 'Datos de {age}',
+    'note.queued': 'Datos de {age} · se actualiza en {s} s',
     'note.ageMin': 'hace {m} min',
     'note.ageUnder': 'hace menos de un minuto',
     'note.expired': 'Token caducado. Haz /login con esta cuenta y vuelve a importarla.',
@@ -173,6 +174,7 @@ const I18N = {
     'sync.min': 'Refreshed {m} min ago',
 
     'note.stale': 'Data from {age}',
+    'note.queued': 'Data from {age} · updates in {s} s',
     'note.ageMin': '{m} min ago',
     'note.ageUnder': 'less than a minute ago',
     'note.expired': 'Token expired. Run /login with this account and import it again.',
@@ -356,6 +358,10 @@ function noteFor(usage) {
     if (usage.stale) {
       const mins = Math.round((Date.now() - usage.staleSince) / 60000);
       const age = mins >= 1 ? t('note.ageMin', { m: mins }) : t('note.ageUnder');
+      // Queued behind the rate floor: say so, or "old data" reads as a broken refresh.
+      if (usage.queued && Number.isFinite(usage.retryInS)) {
+        return { tone: 'warn', text: t('note.queued', { age, s: usage.retryInS }) };
+      }
       return { tone: 'warn', text: t('note.stale', { age }) };
     }
     return null;
@@ -785,8 +791,11 @@ async function importCurrent(configDir, targetId = 'host') {
 // ask again right after the floor lifts. One timer at a time, and never for a hard 429.
 let queuedRetry = null;
 function scheduleQueuedRetry() {
+  // `throttled` is an account with no reading yet; `queued` one that has an old reading and
+  // is waiting its turn behind the rate floor. Both need a re-poll once the floor lifts, or a
+  // manual refresh would renew one account and leave the rest stale until the 10-min poll.
   const waits = Object.values(usageById)
-    .filter((u) => u && u.throttled && Number.isFinite(u.retryInS))
+    .filter((u) => u && (u.throttled || u.queued) && Number.isFinite(u.retryInS))
     .map((u) => u.retryInS);
   if (!waits.length) return;
   clearTimeout(queuedRetry);
