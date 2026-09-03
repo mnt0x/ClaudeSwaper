@@ -145,29 +145,53 @@ Nothing to configure - it runs `wsl.exe -l -q` and takes what comes back.
 
 Three skills drive the panel from inside any Claude Code session, so you can check quota or
 switch account without leaving the terminal. They talk to the running panel over
-`127.0.0.1:7373`; nothing works unless `node server.js` is up.
+`127.0.0.1:7373`; nothing works unless `node server.js` is up (`PORT` if you moved it).
 
-| Command | What it does |
-|---|---|
-| `/swapper-usage` | Lists every account with its 5-hour and weekly quota, and which is active. |
-| `/swapper <name>` | Switches the host's active account to the one named (by label or email) and shows what it has left. |
-| `/swapper-auto [on\|off]` | Turns **automatic rotation** on or off, and shows the current and next account. |
+| Command | What you type | What it does |
+|---|---|---|
+| `/swapper-usage` | `/swapper-usage` | Lists every account with its 5-hour and weekly quota, marks the active one, and says which is freest. Read-only. |
+| `/swapper <name>` | `/swapper Manuel` · `/swapper devs@…` | Switches the host's active account to the one named (label or email), then shows what it has left. |
+| `/swapper-auto` | `/swapper-auto on` · `off` · `status` | Turns **automatic rotation** on or off, and shows the current and next account. |
 
-**Automatic rotation.** With it on, the server watches the active account and, the moment its
-5-hour session reaches **90%**, swaps to the freshest account that still has room — so your next
-`claude` launch lands on capacity you have not spent. It only rotates into an account below the
-threshold in both windows; if none qualifies it stays put. The state is on disk, so it survives a
-restart, and the rotation is the same audited swap (backup, verify, roll back) as a manual one.
+`/swapper-usage` prints an aligned meter per account:
 
-Install the skills once:
+```
+  ● Castillo            carloscastilloazr@gmail.com
+      5h ████████░░  82%     7d █████░░░░░  48%   · EN USO  sesión casi llena
+
+    Manuel Cordero      mcordero@bouncer.digital
+      5h ░░░░░░░░░░   0%     7d ░░░░░░░░░░   0%
+
+  Activa: Castillo (82% / 48%)   ·   más libre: Manuel Cordero — /swapper Manuel
+```
+
+`/swapper Manuel` matches by name or email — if it is ambiguous (two accounts labelled the same)
+it lists them and asks for the email rather than guessing. The change lands on **new** Claude Code
+sessions; one already open keeps its token.
+
+**Automatic rotation** (`/swapper-auto on`). The server then watches the active account and, the
+moment its 5-hour session reaches **90%**, swaps to the freshest account that still has room — so
+your next `claude` launch lands on capacity you have not spent. It only rotates into an account
+below the threshold in both windows; if none qualifies it stays put. State is on disk, so it
+survives a restart, and it is the same audited swap (backup, verify, roll back) as a manual one.
+Turn it off with `/swapper-auto off`.
+
+### Install
+
+Copy the three skill folders into your user skills folder, once:
 
 ```bash
-# from the repo, into your user skills folder
+# macOS / Linux / Git Bash
 cp -r skills/swapper skills/swapper-usage skills/swapper-auto ~/.claude/skills/
 ```
 
-Each skill is self-contained (a `SKILL.md` and a small `swapper.mjs`) and needs only Node and the
-running panel.
+```powershell
+# Windows PowerShell
+Copy-Item skills\swapper,skills\swapper-usage,skills\swapper-auto $env:USERPROFILE\.claude\skills\ -Recurse
+```
+
+Each skill is self-contained — a `SKILL.md` and a small `swapper.mjs` — and needs only Node and
+the running panel. They work from **any** Claude Code session, not just one opened in this repo.
 
 ## Other providers
 
