@@ -71,6 +71,20 @@ docker run -d --name llmswapper -p 127.0.0.1:7373:7373 \
 Another port: `PORT=7400 node server.js`. It never hops to the next free one - the rate floor is
 per process, so a second instance would rate-limit both.
 
+<details>
+<summary><b>Always on (Windows)</b> - start with your session, restart if it dies</summary>
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-autostart.ps1
+```
+
+Registers a per-user scheduled task (no admin) that launches the panel hidden at logon, restarts
+it up to three times if it stops, and never kills it on a time limit. It also starts it right
+away. Output goes to `data\server.log`. Remove with `-Uninstall`. Don't combine it with running
+`node server.js` by hand - same rule as Docker, one instance only.
+
+</details>
+
 ---
 
 > **Status: Claude Code only.** Every account you can add today is an Anthropic one. The problem is
